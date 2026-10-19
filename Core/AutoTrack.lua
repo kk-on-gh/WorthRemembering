@@ -245,6 +245,88 @@ emoteFrame:SetScript("OnEvent", function(_, _, text, playerName, ...)
 	onChatEmote(text, playerName, guid)
 end)
 
+-- "Buffed me": a helpful aura freshly applied by a non-partied player, via
+-- UNIT_AURA's own addedAuras payload. aura.sourceUnit only resolves when the caster has
+-- a live unit token (target, or a visible nameplate), so this misses out-of-range casts.
+local function isSecretValue(v)
+	return issecretvalue and issecretvalue(v)
+end
+
+local lastBuffAt = {}
+local buffQuietUntil = 0
+
+local function considerBuffAura(aura)
+	if GetTime() < buffQuietUntil then
+		return
+	end
+	if not aura or type(aura) ~= "table" or isSecretValue(aura) then
+		return
+	end
+	if isSecretValue(aura.isHelpful) or not aura.isHelpful then
+		return
+	end
+
+	local src = aura.sourceUnit
+	if isSecretValue(src) or type(src) ~= "string" then
+		return
+	end
+	if UnitInParty(src) or UnitInRaid(src) then
+		return
+	end
+
+	local settings = ns.GetSettings().autoTrack
+	local option = settings.buff
+	if not (settings.enabled and option.enabled) then
+		return
+	end
+
+	local identity = ns.IdentifyUnit(src)
+	if not identity then
+		return
+	end
+
+	local cooldownSeconds = (option.cooldownMinutes or 5) * 60
+	local now = time()
+	local lastLoggedAt = lastBuffAt[identity.key]
+	if lastLoggedAt and (now - lastLoggedAt) < cooldownSeconds then
+		return
+	end
+	lastBuffAt[identity.key] = now
+
+	logAuto(identity.key, identity, src, "auto-buff", option.repGain, option.note)
+end
+
+local function onPlayerAura(unit, info)
+	if unit ~= "player" then
+		return
+	end
+	-- a full list rebuild (zoning/login) reports existing auras as "added" too
+	if not info or type(info) ~= "table" or isSecretValue(info) then
+		return
+	end
+	if isSecretValue(info.isFullUpdate) or info.isFullUpdate then
+		return
+	end
+	local added = info.addedAuras
+	if not added or type(added) ~= "table" or isSecretValue(added) then
+		return
+	end
+	for _, aura in ipairs(added) do
+		considerBuffAura(aura)
+	end
+end
+
+local auraFrame = CreateFrame("Frame")
+auraFrame:RegisterUnitEvent("UNIT_AURA", "player")
+auraFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+auraFrame:SetScript("OnEvent", function(_, event, unit, info)
+	if event == "PLAYER_ENTERING_WORLD" then
+		buffQuietUntil = GetTime() + 3
+		return
+	end
+	pcall(onPlayerAura, unit, info)
+end)
+
 -- "completing" a dungeon/raid is approximated as leaving it, not a boss-kill event:
 -- classic doesn't expose a reliable encounter-complete signal across every instance, but
 -- everyone leaving together after a run is close enough. instanceID (from

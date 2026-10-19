@@ -1,9 +1,19 @@
 local ns = WorthRemembering
 
--- mirrors /mnt/4tbHDD/Documents/MyNotesAddon/CHANGELOG.md. the game can't read that file
--- at runtime, so the About tab's content has to be duplicated here by hand whenever the
--- changelog is updated. most recent entry first.
+-- mirrors CHANGELOG.md at the repo root. the game can't read that file at runtime, so
+-- the About tab's content has to be duplicated here by hand whenever the changelog is
+-- updated. most recent entry first.
 ns.CHANGELOG = {
+	{
+		version = "0.5.7", date = "2026-10-19", shipped = true,
+		sections = {
+			{ heading = "Added", items = {
+				"Two checkboxes in Options > General > Window: \"Hide the +/- standing buttons (Players tab)\" and \"Hide the New entry button (Players tab)\", independently toggleable, off by default. The Standing and Notes columns can now shrink further once their button is hidden, and widen back out automatically if you re-enable a button after shrinking the column while it was hidden, so it can't end up floating over the next column.",
+				"New Auto-Track trigger, \"Buffed me\": logs when another player casts a helpful buff on you, as long as they aren't partied with you. Only catches it if the game can currently identify them (your target, or a visible nameplate), not anyone nearby regardless of visibility. Off by default, +2 rep.",
+				"New checkbox in Options > General > Chat & Minimap: \"Show 'Entry created' message in chat window\". When on, prints \"Entry created for <name>\" for every new entry with a note or rep change attached, regardless of source (manual, auto-track, the dungeon survey, etc). Off by default.",
+			}},
+		},
+	},
 	{
 		version = "0.5.6", date = "2026-10-18", shipped = true,
 		sections = {

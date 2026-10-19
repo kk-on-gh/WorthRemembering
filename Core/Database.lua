@@ -210,6 +210,11 @@ function ns.AddEntry(key, identity, entry)
 	end
 	record.entries[#record.entries + 1] = entry
 
+	local hasContent = (entry.text and entry.text ~= "") or (entry.delta and entry.delta ~= 0)
+	if hasContent and ns.GetSettings().showEntryCreatedMessage then
+		ns.Print("Entry created for " .. ns.DisplayName(record, key))
+	end
+
 	-- auto-nearby entries can fire once per stranger in a crowd, excluded here so they
 	-- don't spam the new-entry sound
 	local soundSettings = ns.GetSettings().newEntrySound

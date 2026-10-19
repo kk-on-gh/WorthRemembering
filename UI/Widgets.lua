@@ -523,6 +523,16 @@ function ns.CreateSortableTable(parent, config)
 		return not (vis and vis[key] == false)
 	end
 
+	-- a column's min can be a plain number, or a function for a floor that depends on
+	-- live settings (e.g. a column that needs less room once some per-row button
+	-- riding on it is hidden via its own Options checkbox)
+	local function resolveMin(col)
+		if type(col.min) == "function" then
+			return col.min()
+		end
+		return col.min or 30
+	end
+
 	-- Applies any previously user-resized widths (see the resize handle below) before the
 	-- header/rows are ever laid out, so a saved width takes effect from the first draw.
 	if config.tableId then
@@ -530,7 +540,7 @@ function ns.CreateSortableTable(parent, config)
 		if saved then
 			for _, col in ipairs(columns) do
 				if col.key ~= flexKey and saved[col.key] then
-					col.width = math.max(col.min or 30, saved[col.key])
+					col.width = math.max(resolveMin(col), saved[col.key])
 				end
 			end
 		end
@@ -977,7 +987,7 @@ function ns.CreateSortableTable(parent, config)
 			handle:SetScript("OnUpdate", function()
 				local scale = UIParent:GetEffectiveScale()
 				local dx = (GetCursorPosition() - startX) / scale
-				targetCol.width = math.max(targetCol.min or 30, startWidth + (invert and -dx or dx))
+				targetCol.width = math.max(resolveMin(targetCol), startWidth + (invert and -dx or dx))
 				relayout()
 			end)
 		end)

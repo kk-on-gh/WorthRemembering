@@ -2,6 +2,13 @@
 
 All notable changes to Worth Remembering are documented here.
 
+## [0.5.7] - 2026-10-19
+
+### Added
+- Two checkboxes in Options > General > Window: "Hide the +/- standing buttons (Players tab)" and "Hide the New entry button (Players tab)", independently toggleable, off by default. The Standing and Notes columns can now shrink further once their button is hidden, and widen back out automatically if you re-enable a button after shrinking the column while it was hidden, so it can't end up floating over the next column.
+- New Auto-Track trigger, "Buffed me": logs when another player casts a helpful buff on you, as long as they aren't partied with you. Only catches it if the game can currently identify them (your target, or a visible nameplate), not anyone nearby regardless of visibility. Off by default, +2 rep.
+- New checkbox in Options > General > Chat & Minimap: "Show 'Entry created' message in chat window". When on, prints "Entry created for <name>" for every new entry with a note or rep change attached, regardless of source (manual, auto-track, the dungeon survey, etc). Off by default.
+
 ## [0.5.6] - 2026-10-18
 
 ### Changed

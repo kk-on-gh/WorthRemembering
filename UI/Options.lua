@@ -161,7 +161,7 @@ local function createSectionBox(parent, y, height, title)
 end
 
 local function buildWindowBox(parent, y)
-	local height = 144
+	local height = 184
 	local box = createSectionBox(parent, y, height, "Window")
 
 	buildSlider(box, {
@@ -227,6 +227,31 @@ local function buildWindowBox(parent, y)
 		end,
 		140, 20)
 	dateDropdown:SetPoint("TOPLEFT", dateLabel, "BOTTOMLEFT", 2, -4)
+
+	buildCheckbox(box, 10, -132, "Hide the +/- standing buttons (Players tab)",
+		ns.GetSettings().hidePlayersStandingButtons,
+		function(checked)
+			ns.GetSettings().hidePlayersStandingButtons = checked
+			-- re-enabling: if the Standing column got shrunk below the
+			-- buttons-shown minimum while they were hidden, widen it back out so
+			-- the buttons don't float over the Bracket column next to it
+			if not checked and ns.EnforcePlayersColumnMinWidth then
+				ns.EnforcePlayersColumnMinWidth("standing", 100)
+			elseif ns.RefreshOverview then
+				ns.RefreshOverview()
+			end
+		end)
+
+	buildCheckbox(box, 10, -154, "Hide the New entry button (Players tab)",
+		ns.GetSettings().hidePlayersNewButton,
+		function(checked)
+			ns.GetSettings().hidePlayersNewButton = checked
+			if not checked and ns.EnforcePlayersColumnMinWidth then
+				ns.EnforcePlayersColumnMinWidth("notes", 90)
+			elseif ns.RefreshOverview then
+				ns.RefreshOverview()
+			end
+		end)
 
 	return y - height - 6
 end
@@ -451,7 +476,7 @@ local function buildNameplateIconControl(parent, y)
 end
 
 local function buildChatMinimapBox(parent, y)
-	local height = 76
+	local height = 100
 	local box = createSectionBox(parent, y, height, "Chat & Minimap")
 
 	local chatSettings = ns.GetSettings().chatIndicator
@@ -463,6 +488,10 @@ local function buildChatMinimapBox(parent, y)
 	buildCheckbox(box, 8, -46, "Show the minimap icon",
 		not minimapSettings.hide,
 		function(checked) ns.SetMinimapIconShown(checked) end)
+
+	buildCheckbox(box, 8, -70, "Show \"Entry created\" message in chat window",
+		ns.GetSettings().showEntryCreatedMessage,
+		function(checked) ns.GetSettings().showEntryCreatedMessage = checked end)
 
 	return y - height - 6
 end

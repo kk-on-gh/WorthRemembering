@@ -35,6 +35,9 @@ ns.Defaults = {
 		chatIndicator = {
 			enabled = true,
 		},
+		-- prints "Entry created for <name>" for every new entry, regardless of source
+		-- (manual, auto-track, survey, etc). off by default.
+		showEntryCreatedMessage = false,
 		-- Automatic logging on events the addon can observe directly. `enabled` is the
 		-- category master switch; `party` logs an entry when a player joins your
 		-- party/raid. Combat-log-based triggers (heal/rez/buff) are not available:
@@ -59,6 +62,8 @@ ns.Defaults = {
 			wave = { enabled = false, repGain = 1, note = "[Auto] Waved at me.", cooldownMinutes = 5 },
 			thank = { enabled = false, repGain = 1, note = "[Auto] Thanked me.", cooldownMinutes = 5 },
 			bow = { enabled = false, repGain = 1, note = "[Auto] Bowed to me.", cooldownMinutes = 5 },
+			-- actual aura detection, not a text emote, see AutoTrack.lua's onPlayerAura
+			buff = { enabled = false, repGain = 2, note = "[Auto] Buffed me.", cooldownMinutes = 5 },
 		},
 		-- Separate from autoTrack above: dungeon/raid tracking needs more custom controls
 		-- (a survey popup, a role-preset list) than the generic per-trigger row the rest
@@ -258,6 +263,10 @@ ns.Defaults = {
 		},
 		timeFormat = "24h", -- "24h" | "12h"
 		dateFormat = "ymd", -- "ymd" | "mdy" | "dmy"
+		-- Players tab row buttons, independently hideable. Off (buttons shown) by
+		-- default, matching existing behavior for anyone upgrading.
+		hidePlayersStandingButtons = false,
+		hidePlayersNewButton = false,
 		-- which tab the main window opens to when the Quick Note keybind fires with no
 		-- target, see ns.QuickNoteTarget. quickNoteFallbackEnabled off disables that
 		-- open-window behavior entirely (the hotkey just does nothing with no
@@ -316,6 +325,8 @@ ns.AUTO_TRACK_DEFS = {
 		hint = "Logged when another player resurrects you. Only resolves a full identity if they're your current target or on a nearby nameplate, otherwise logs by name alone." },
 	{ key = "quest", source = "auto-quest", label = "Questing together", hasCooldown = true, hasMinGrouped = true,
 		hint = "Logged for each party/raid member when you turn in a quest while grouped with them." },
+	{ key = "buff", source = "auto-buff", label = "Buffed me", hasCooldown = true,
+		hint = "Logged when another player casts a helpful buff on you, as long as they aren't partied with you (partying is covered by \"Partied with\" above). Only catches it if the game can currently identify them, which needs them to be your target or have a visible nameplate (Shift+V shows friendly nameplates) at that exact moment, not just anyone nearby." },
 	{ key = "wave", source = "auto-wave", label = "Waved at me", hasCooldown = true, isEmote = true,
 		hint = "Logged when another player /waves directly at you (not a general wave to nobody in particular)." },
 	{ key = "thank", source = "auto-thank", label = "Thanked me", hasCooldown = true, isEmote = true,

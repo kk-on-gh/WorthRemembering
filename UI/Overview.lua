@@ -523,10 +523,17 @@ local COLUMNS = {
 	{ key = "race", label = "Race", width = 90, min = 70, onCellClick = onRaceCellClick },
 	{ key = "class", label = "Class", width = 90, min = 70, onCellClick = onClassCellClick },
 	{ key = "faction", label = "Faction", width = 80, min = 60, onCellClick = onFactionCellClick },
-	{ key = "standing", label = "Standing", width = 130, min = 100 },
+	-- min depends on whether the +/- buttons are hidden (Options > General > Window):
+	-- shown, the column needs enough room they don't float over the Bracket column
+	-- next to it; hidden, there's nothing riding on it that needs the extra room
+	{ key = "standing", label = "Standing", width = 130,
+		min = function() return ns.GetSettings().hidePlayersStandingButtons and 50 or 100 end },
 	{ key = "bracket", label = "Bracket", width = 110, min = 80, onCellClick = onBracketCellClick },
 	{ key = "entries", label = "Entries", width = 90, min = 50 },
-	{ key = "notes", label = "Notes", width = 110, min = 90 },
+	-- min depends on whether the New button is hidden (Options > General > Window): see
+	-- the Standing column's own identical reasoning above
+	{ key = "notes", label = "Notes", width = 110,
+		min = function() return ns.GetSettings().hidePlayersNewButton and 40 or 90 end },
 	{ key = "seenCount", label = "Times Seen", width = 100, min = 60 },
 	{ key = "lastSeen", label = "Last Seen", width = 130, min = 100 },
 	{ key = "lastLocation", label = "Last Location", width = 120, min = 70 },
@@ -669,6 +676,29 @@ local function render(row, item)
 
 		row.cellButtons.standing = row.standingButtons
 		row.cellButtons.notes = row.newButton
+
+		-- relayout() (Widgets.lua) calls :Show()/:Hide() on these directly whenever the
+		-- Standing/Notes column itself toggles, independent of the Options > General
+		-- settings below. Overriding Show (not just hiding here once) means it stays
+		-- correct regardless of which of the two independent toggles changes, or in
+		-- which order: relayout calling Show no longer un-hides a button the user asked
+		-- to keep hidden.
+		local showStandingButtons = row.standingButtons.Show
+		row.standingButtons.Show = function(self)
+			if ns.GetSettings().hidePlayersStandingButtons then
+				self:Hide()
+			else
+				showStandingButtons(self)
+			end
+		end
+		local showNewButton = row.newButton.Show
+		row.newButton.Show = function(self)
+			if ns.GetSettings().hidePlayersNewButton then
+				self:Hide()
+			else
+				showNewButton(self)
+			end
+		end
 	end
 	-- re-bound every render since rows are reused across refreshes for different players
 	row.minusButton:SetScript("OnClick", function()
@@ -709,6 +739,29 @@ function ns.RefreshFooter(shownText, totalText)
 		text = text .. "  \124\124  " .. shownText
 	end
 	mainFrame.footer:SetText(text)
+end
+
+-- called when "Hide the +/- standing buttons" or "Hide the New entry button" (Options >
+-- General > Window) gets turned back off: if the user had shrunk that column below the
+-- buttons-shown minimum while they were hidden, re-enabling them would otherwise float
+-- them over the next column's content instead of making room. Widens it back up to
+-- `minWidth` (and persists that, same as a manual drag-resize would) if it's currently
+-- narrower.
+function ns.EnforcePlayersColumnMinWidth(key, minWidth)
+	for _, col in ipairs(COLUMNS) do
+		if col.key == key then
+			if col.width < minWidth then
+				col.width = minWidth
+				local widths = ns.GetSettings().columnWidths
+				widths.players = widths.players or {}
+				widths.players[key] = minWidth
+			end
+			break
+		end
+	end
+	if ns.RefreshOverview then
+		ns.RefreshOverview()
+	end
 end
 
 function ns.RefreshOverview()
