@@ -1,0 +1,5 @@
+<Bindings>
+	<Binding name="WR_QUICKNOTE" header="ADDONS" description="Open a quick note/standing entry for your current target">
+		WorthRemembering.QuickNoteTarget()
+	</Binding>
+</Bindings>
