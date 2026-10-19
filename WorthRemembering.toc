@@ -6,7 +6,8 @@
 ## SavedVariables: WorthRememberingDB
 ## IconTexture: Interface\AddOns\WorthRemembering\Media\MinimapIcon.png
 ## X-Category: Miscellaneous
-## X-License: Proprietary
+## X-License: GPL-3.0
+## X-Wago-ID: QN5JWv6B
 
 Core/Namespace.lua
 Core/Changelog.lua
