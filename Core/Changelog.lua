@@ -5,6 +5,14 @@ local ns = WorthRemembering
 -- updated. most recent entry first.
 ns.CHANGELOG = {
 	{
+		version = "0.5.9", date = "2026-10-20", shipped = true,
+		sections = {
+			{ heading = "Fixed", items = {
+				"The \"Buffed me\" Auto-Track trigger could log an entry crediting yourself when a buff you applied to yourself (a racial, trinket, enchant, food, etc) had no one else partied with you to exclude it against.",
+			}},
+		},
+	},
+	{
 		version = "0.5.8", date = "2026-10-19", shipped = true,
 		sections = {
 			{ heading = "Fixed", items = {

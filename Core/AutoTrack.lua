@@ -270,6 +270,9 @@ local function considerBuffAura(aura)
 	if isSecretValue(src) or type(src) ~= "string" then
 		return
 	end
+	if UnitIsUnit(src, "player") then
+		return
+	end
 	if UnitInParty(src) or UnitInRaid(src) then
 		return
 	end

@@ -2,6 +2,11 @@
 
 All notable changes to Worth Remembering are documented here.
 
+## [0.5.9] - 2026-10-20
+
+### Fixed
+- The "Buffed me" Auto-Track trigger could log an entry crediting yourself when a buff you applied to yourself (a racial, trinket, enchant, food, etc) had no one else partied with you to exclude it against.
+
 ## [0.5.8] - 2026-10-19
 
 ### Fixed
