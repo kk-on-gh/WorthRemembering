@@ -5,6 +5,14 @@ local ns = WorthRemembering
 -- updated. most recent entry first.
 ns.CHANGELOG = {
 	{
+		version = "0.5.8", date = "2026-10-19", shipped = true,
+		sections = {
+			{ heading = "Fixed", items = {
+				"Holding the radial quick-add hotkey while in combat, with \"Disable radial menu during combat\" enabled, could throw an ADDON_ACTION_BLOCKED error instead of just declining to open.",
+			}},
+		},
+	},
+	{
 		version = "0.5.7", date = "2026-10-19", shipped = true,
 		sections = {
 			{ heading = "Added", items = {

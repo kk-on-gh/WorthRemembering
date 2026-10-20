@@ -2,7 +2,7 @@
 ## Title: Worth Remembering
 ## Notes: Keep distinct, timestamped notes and a -100..+100 standing on players you meet.
 ## Author: Kyle
-## Version: 0.5.7
+## Version: 0.5.8
 ## SavedVariables: WorthRememberingDB
 ## IconTexture: Interface\AddOns\WorthRemembering\Media\MinimapIcon.png
 ## X-Category: Miscellaneous

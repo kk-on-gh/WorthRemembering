@@ -138,6 +138,9 @@ local PRE_CLICK = ([[
 		-- past that point a release in the deadzone is a deliberate cancel (the player's
 		-- clearly already looking at an open wheel), not a tap
 		self:SetAttribute("wr-revealed", false)
+		-- reset here, from secure code, since OnOpen (insecure, called via CallMethod
+		-- below) can't touch this attribute itself while in combat lockdown
+		self:SetAttribute("wr-active", false)
 		owner:CallMethod("OnOpen", ring)
 		return false
 	end
@@ -730,8 +733,9 @@ function Controller:OnOpen(ring)
 	-- behavior (OnTap doesn't go through here at all), so held-key note-taking still
 	-- works mid-fight, there's just nothing to drag toward
 	if ns.GetSettings().radialMenu.disableInCombat and InCombatLockdown() then
+		-- can't SetAttribute from here during combat lockdown; the secure snippet
+		-- already reset wr-active to false at keydown before calling this
 		openPresets = nil
-		ringButton:SetAttribute("wr-active", false)
 		return
 	end
 

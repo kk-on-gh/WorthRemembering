@@ -2,6 +2,11 @@
 
 All notable changes to Worth Remembering are documented here.
 
+## [0.5.8] - 2026-10-19
+
+### Fixed
+- Holding the radial quick-add hotkey while in combat, with "Disable radial menu during combat" enabled, could throw an ADDON_ACTION_BLOCKED error instead of just declining to open.
+
 ## [0.5.7] - 2026-10-19
 
 ### Added
