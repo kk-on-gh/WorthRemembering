@@ -14,7 +14,7 @@ Built for WoW: Forever, with the intention of being as unintrusive and easy to u
 
 I'm very open to suggestions, bug reports, and feature requests (and pull requests on github!). If something feels clunky or you want something it doesn't do yet, let me know and I'll absolutely consider it.
 
-<span><span><span><iframe width="560" height="315" src="https://www.youtube.com/embed/4Pnz_Sy7wXg" frameborder="0" allowfullscreen="allowfullscreen"></iframe></span></span></span>
+[Watch the demo video](https://www.youtube.com/watch?v=4Pnz_Sy7wXg)
 
 ## Installation
 
