@@ -5,6 +5,14 @@ local ns = WorthRemembering
 -- updated. most recent entry first.
 ns.CHANGELOG = {
 	{
+		version = "0.5.10", date = "2026-10-20", shipped = true,
+		sections = {
+			{ heading = "Fixed", items = {
+				"Dying in a dungeon/raid and releasing to the graveyard could trigger the completion auto-log and survey prompt mid-run, since it looks the same as actually leaving.",
+			}},
+		},
+	},
+	{
 		version = "0.5.9", date = "2026-10-20", shipped = true,
 		sections = {
 			{ heading = "Fixed", items = {

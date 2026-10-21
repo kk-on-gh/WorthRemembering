@@ -392,6 +392,11 @@ local function onInstanceTransition()
 			logDungeonForParty(snapshotPartyMembers(), currentInstanceName, settings.autoLog)
 		end
 	elseif currentInstanceID then
+		-- dying releases to a graveyard outside the instance, same signal as leaving
+		if UnitIsDeadOrGhost("player") then
+			return
+		end
+
 		-- snapshotted once, used by whichever of the two features (both, either, or
 		-- neither) is actually enabled, rather than re-deriving it per feature
 		local needMembers = (settings.autoLog.enabled and settings.autoLog.onlyOnCompletion) or settings.survey.enabled

@@ -2,6 +2,11 @@
 
 All notable changes to Worth Remembering are documented here.
 
+## [0.5.10] - 2026-10-20
+
+### Fixed
+- Dying in a dungeon/raid and releasing to the graveyard could trigger the completion auto-log and survey prompt mid-run, since it looks the same as actually leaving.
+
 ## [0.5.9] - 2026-10-20
 
 ### Fixed
