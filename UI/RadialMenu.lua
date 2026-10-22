@@ -673,11 +673,12 @@ local function closeWheel()
 	cancelCatcher:EnableMouse(false)
 end
 
--- Escape, or a right-click anywhere, cancels like any other MMO popup would, while still
--- letting every other key/click through untouched (including whatever key the radial
--- itself is bound to, handled separately via the override-binding click dispatch, not
--- this frame). only enabled for as long as the wheel is actually open, so it never
--- intercepts input otherwise.
+-- Escape or a click anywhere cancels like any other MMO popup would, only enabled for as
+-- long as the wheel is actually open. any button closes it, not just right-click: WoW has
+-- no mouse click passthrough, so a click landing here is already swallowed either way,
+-- closing on any button means that's the only click lost instead of every click until a
+-- right-click/Escape happens to land (the actual radial hotkey itself still works even
+-- while this is up, via the override-binding click dispatch, not this frame).
 cancelCatcher = CreateFrame("Frame", nil, UIParent)
 cancelCatcher:SetAllPoints(UIParent)
 cancelCatcher:SetFrameStrata("TOOLTIP")
@@ -685,10 +686,8 @@ cancelCatcher:EnableKeyboard(false)
 cancelCatcher:EnableMouse(false)
 cancelCatcher:SetPropagateKeyboardInput(true)
 cancelCatcher:SetScript("OnMouseDown", function(self, button)
-	if button == "RightButton" then
-		escCancelled = true
-		closeWheel()
-	end
+	escCancelled = true
+	closeWheel()
 end)
 cancelCatcher:SetScript("OnKeyDown", function(self, key)
 	if key == "ESCAPE" then
@@ -883,4 +882,10 @@ combatWaiter:SetScript("OnEvent", rebuild)
 
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
-initFrame:SetScript("OnEvent", rebuild)
+initFrame:SetScript("OnEvent", function()
+	rebuild()
+	-- a key already physically held down the instant its override binding registers
+	-- can fire a phantom click with no matching keyup, leaving cancelCatcher's
+	-- full-screen click-eater stuck enabled. self-heals shortly after login regardless.
+	C_Timer.After(2, closeWheel)
+end)

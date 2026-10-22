@@ -5,6 +5,14 @@ local ns = WorthRemembering
 -- updated. most recent entry first.
 ns.CHANGELOG = {
 	{
+		version = "0.5.11", date = "2026-10-21", shipped = true,
+		sections = {
+			{ heading = "Fixed", items = {
+				"Left clicks could get completely blocked everywhere until a right click, if the radial quick-add menu's invisible cancel-catcher got stuck enabled. Any click now closes it immediately instead of only a right click or Escape.",
+			}},
+		},
+	},
+	{
 		version = "0.5.10", date = "2026-10-20", shipped = true,
 		sections = {
 			{ heading = "Fixed", items = {

@@ -2,6 +2,11 @@
 
 All notable changes to Worth Remembering are documented here.
 
+## [0.5.11] - 2026-10-21
+
+### Fixed
+- Left clicks could get completely blocked everywhere until a right click, if the radial quick-add menu's invisible cancel-catcher got stuck enabled. Any click now closes it immediately instead of only a right click or Escape.
+
 ## [0.5.10] - 2026-10-20
 
 ### Fixed
