@@ -2,7 +2,7 @@
 
 Never forget the people you meet.
 
-**Worth Remembering** is a personal notes and reputation tracker for WoW: Forever.
+**Worth Remembering** is a personal notes and reputation tracker for World of Warcraft.
 
 People, and the memories you make with them, are why MMOs are special: the companion who quested with you for three hours, the person who saved your group in that elite area, the stranger you had a nice conversation with at a campfire. These interactions with others are the memories you keep. The problem, for me, is that I have the memory of a gerbil. So I made **Worth Remembering**.
 
@@ -142,7 +142,8 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes.
 * A draggable minimap icon for quick access: left-click to open the window, right-click for a small menu, or hide it entirely from Options.
 * `/wr` opens the main window, with `note`/`rep`/`show`/`list` subcommands for keyboard-driven use.
 * `/wrquick <preset label>` (eg `/wrquick good healer` will instantly apply that preset to your target - good for window-free adding via macros.
-* Optional automatic logging (Options > Auto-Track), each with its own toggle, rep gain, note text, and cooldown: partying up, being rezzed, someone waving/thanking/bowing directly at you, questing together in a group, and more.
+* Optional automatic logging (Options > Auto-Track), each with its own toggle, rep gain, note text, and cooldown: partying up, being rezzed, someone waving/thanking/bowing directly at you, duels, questing together in a group, and more.
+* Optional automatic entries for players that show up in Blizzard's "Recent Allies" window.
 * Optional "track everyone nearby," which quietly records anyone whose nameplate you see, even before you've written a note about them (without a note or rep).
 * A "Clear Database" option in Options for starting fresh, with a confirmation since it can't be undone.
 * A "Clear Non-Notable" option in Options for clearing all players with zero reputation and no notes.
@@ -181,7 +182,7 @@ Presets
 
 ## A Note on Design
 
-A lot of care went into making this feel quick to use rather than another window you have to fight with. At the same time, I tried to offer a lot of customization options because I, for one, really like tweaking things until they're _just right_. 
+A lot of care went into making this feel quick to use rather than another window you have to fight with. At the same time, I tried to offer a lot of customization options because I, for one, really like tweaking things until they're _just right_.
 
 AI assistance was used in writing this addon, and I know how many low-effort AI addons are floating around right now. This one has had a lot of iteration, testing, and actual design thought behind it, and I'm not done with it. I hope it passes the "slop" bar for you.
 
