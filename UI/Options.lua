@@ -28,6 +28,50 @@ StaticPopupDialogs["WR_CONFIRM_CLEAR_NONNOTABLE"] = {
 	preferredIndex = 3,
 }
 
+-- data is the function that does the replacing
+StaticPopupDialogs["WR_CONFIRM_RESET_CUSTOM_BRACKETS"] = {
+	text = "Replace your custom bracket %s with the \"%s\" preset? This can't be undone.",
+	button1 = "Replace",
+	button2 = "Cancel",
+	OnAccept = function(_, data)
+		if data then
+			data()
+		end
+	end,
+	timeout = 0,
+	whileDead = true,
+	hideOnEscape = true,
+	preferredIndex = 3,
+}
+
+StaticPopupDialogs["WR_CONFIRM_RESET_UI"] = {
+	text = "Reset every Worth Remembering window (position, size, scale, opacity, visibility), column layouts, Nearby window layout, minimap button, and nameplate icon size/offset? Your UI will reload.",
+	button1 = "Reset UI",
+	button2 = "Cancel",
+	OnAccept = function()
+		ns.ResetUISettings()
+		ReloadUI()
+	end,
+	timeout = 0,
+	whileDead = true,
+	hideOnEscape = true,
+	preferredIndex = 3,
+}
+
+StaticPopupDialogs["WR_CONFIRM_RESET_OPTIONS"] = {
+	text = "Reset ALL Worth Remembering options to their defaults? Your players, notes, and standings are kept. Your UI will reload.",
+	button1 = "Reset Options",
+	button2 = "Cancel",
+	OnAccept = function()
+		ns.ResetAllSettings()
+		ReloadUI()
+	end,
+	timeout = 0,
+	whileDead = true,
+	hideOnEscape = true,
+	preferredIndex = 3,
+}
+
 -- Shared by every slider in Options: a label, a compact slider, and a numeric entry box
 -- underneath it for precise values. `opts`:
 --   x, y, label, min, max, step, width, isPercent (display/enter as a 0-100 percent
@@ -46,6 +90,9 @@ local function setContainerEnabled(container, enabled)
 	if objType == "EditBox" then
 		container:EnableMouse(enabled)
 		container:EnableKeyboard(enabled)
+	elseif objType == "Slider" then
+		-- dimming alone left a grayed-out slider still draggable
+		container:EnableMouse(enabled)
 	elseif objType == "CheckButton" or objType == "Button" then
 		if container.SetEnabled then
 			container:SetEnabled(enabled)
@@ -141,11 +188,16 @@ local function buildSlider(parent, opts)
 		self:ClearFocus()
 	end)
 
-	return valueBox
+	-- the parts too, for callers that gray the whole slider out or set it from elsewhere
+	return valueBox, { label = label, slider = slider, lowText = lowText, highText = highText, valueBox = valueBox }
 end
 
 -- a bordered, titled box matching the grouped-section look used throughout Options.
 -- spans the panel's full width (12px side margins), fixed height, title in top-left.
+-- the most recently created section box, so wrapCollapsible can find the box a builder
+-- just made without every builder having to return it
+local lastSectionBox
+
 local function createSectionBox(parent, y, height, title)
 	local box = CreateFrame("Frame", nil, parent, "BackdropTemplate")
 	box:SetPoint("TOPLEFT", 12, y)
@@ -156,13 +208,83 @@ local function createSectionBox(parent, y, height, title)
 	local titleText = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 	titleText:SetPoint("TOPLEFT", 8, -6)
 	titleText:SetText(title)
+	box.titleText = titleText
 
+	lastSectionBox = box
 	return box, titleText
 end
 
+-- height of a collapsed box (just its title row); an expanded box's content starts at
+-- -COLLAPSED_HEIGHT, right under the title
+local COLLAPSED_HEIGHT = 24
+
+-- a +/- toggle at the start of a box's title row. clicking the title toggles too
+local function createDisclosure(box, expanded, onClick)
+	-- same tinted-UIPanelButtonTemplate look as the Players tab's +/- buttons
+	local toggleButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+	toggleButton:SetSize(18, 16)
+	toggleButton:SetPoint("TOPLEFT", 5, -4)
+	local toggleTint = toggleButton:CreateTexture(nil, "ARTWORK", nil, -1)
+	toggleTint:SetPoint("TOPLEFT", 3, -3)
+	toggleTint:SetPoint("BOTTOMRIGHT", -3, 3)
+	toggleTint:SetColorTexture(0.6, 0.18, 0.18, 0.65)
+	toggleButton:SetText(expanded and "-" or "+")
+	toggleButton:SetScript("OnClick", onClick)
+
+	local title = box.titleText
+	if title then
+		title:ClearAllPoints()
+		title:SetPoint("LEFT", toggleButton, "RIGHT", 5, 0)
+		local titleButton = CreateFrame("Button", nil, box)
+		titleButton:SetPoint("TOPLEFT", title, "TOPLEFT", -2, 3)
+		titleButton:SetPoint("BOTTOMRIGHT", title, "BOTTOMRIGHT", 2, -3)
+		titleButton:SetScript("OnClick", onClick)
+	end
+	return toggleButton
+end
+
+local BACKDROP_PIECES = {
+	"TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner",
+	"TopEdge", "BottomEdge", "LeftEdge", "RightEdge", "Center",
+}
+
+-- turns any existing section-box builder into a collapsible one: builds it normally,
+-- then (collapsed) hides everything but the title and border and shrinks it to the
+-- title row. expandedState[key] is session-only, so every box starts collapsed
+local function wrapCollapsible(expandedState, key, builder, parent, y, onToggle)
+	local nextY = builder(parent, y)
+	local box = lastSectionBox
+	local expanded = expandedState[key] == true
+
+	if not expanded then
+		local keep = { [box.titleText] = true }
+		for _, pieceName in ipairs(BACKDROP_PIECES) do
+			if box[pieceName] then
+				keep[box[pieceName]] = true
+			end
+		end
+		for _, child in ipairs({ box:GetChildren() }) do
+			child:Hide()
+		end
+		for _, region in ipairs({ box:GetRegions() }) do
+			if not keep[region] then
+				region:Hide()
+			end
+		end
+		box:SetHeight(COLLAPSED_HEIGHT)
+		nextY = y - COLLAPSED_HEIGHT - 6
+	end
+
+	createDisclosure(box, expanded, function()
+		expandedState[key] = not expanded
+		onToggle()
+	end)
+	return nextY
+end
+
 local function buildWindowBox(parent, y)
-	local height = 184
-	local box = createSectionBox(parent, y, height, "Window")
+	local height = 228
+	local box = createSectionBox(parent, y, height, "Main")
 
 	buildSlider(box, {
 		x = 10, y = -26, label = "Opacity", min = 0.3, max = 1.0, step = 0.05, width = 150,
@@ -228,7 +350,39 @@ local function buildWindowBox(parent, y)
 		140, 20)
 	dateDropdown:SetPoint("TOPLEFT", dateLabel, "BOTTOMLEFT", 2, -4)
 
-	buildCheckbox(box, 10, -132, "Hide the +/- standing buttons (Players tab)",
+	local bodyStyleLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	bodyStyleLabel:SetPoint("TOPLEFT", 10, -134)
+	bodyStyleLabel:SetText("Body type display")
+	local bodyStyleDropdown = ns.CreateDropdown(box, {
+		{ value = "binary", text = "Male/Female" },
+		{ value = "numbered", text = "1/2" },
+	},
+		function(value) return ns.GetSettings().bodyTypeStyle == value end,
+		function(value)
+			ns.GetSettings().bodyTypeStyle = value
+			ns.RefreshAllTabs()
+		end,
+		140, 20)
+	bodyStyleDropdown:SetPoint("TOPLEFT", bodyStyleLabel, "BOTTOMLEFT", 2, -4)
+	setTooltip(bodyStyleDropdown, "How a player's body type is shown on the Players and History tabs.")
+
+	local bodyLabelLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	bodyLabelLabel:SetPoint("TOPLEFT", 190, -134)
+	bodyLabelLabel:SetText("Body label")
+	local bodyLabelDropdown = ns.CreateDropdown(box, {
+		{ value = "bodyType", text = "Body Type" },
+		{ value = "sex", text = "Sex" },
+	},
+		function(value) return ns.GetSettings().bodyTypeLabel == value end,
+		function(value)
+			ns.GetSettings().bodyTypeLabel = value
+			ns.RefreshAllTabs()
+		end,
+		140, 20)
+	bodyLabelDropdown:SetPoint("TOPLEFT", bodyLabelLabel, "BOTTOMLEFT", 2, -4)
+	setTooltip(bodyLabelDropdown, "What that column is titled.")
+
+	buildCheckbox(box, 10, -176, "Hide the +/- standing buttons (Players tab)",
 		ns.GetSettings().hidePlayersStandingButtons,
 		function(checked)
 			ns.GetSettings().hidePlayersStandingButtons = checked
@@ -242,7 +396,7 @@ local function buildWindowBox(parent, y)
 			end
 		end)
 
-	buildCheckbox(box, 10, -154, "Hide the New entry button (Players tab)",
+	buildCheckbox(box, 10, -198, "Hide the New entry button (Players tab)",
 		ns.GetSettings().hidePlayersNewButton,
 		function(checked)
 			ns.GetSettings().hidePlayersNewButton = checked
@@ -272,6 +426,9 @@ local function buildStandingBox(parent, y)
 		ns.GetSettings().neutralBand = value
 		neutralBox:SetText(tostring(value))
 		neutralBox:ClearFocus()
+		if ns.RefreshBracketRangeLabels then
+			ns.RefreshBracketRangeLabels()
+		end
 		ns.RefreshOverview()
 		if ns.RefreshHistory then
 			ns.RefreshHistory()
@@ -290,7 +447,7 @@ local function buildStandingBox(parent, y)
 	local shiftBox = ns.CreateSmallEditBox(box, 30, 14, true)
 	shiftBox:SetPoint("TOPLEFT", shiftLabel, "BOTTOMLEFT", 4, -4)
 	shiftBox:SetText(tostring(ns.GetSettings().shiftClickAmount))
-	setTooltip(shiftBox, "Shift-click the +/- buttons on the Players tab to adjust standing by this amount instead of 1.")
+	setTooltip(shiftBox, "Shift-click the +/- buttons on the Players tab or the instance survey to adjust standing by this amount instead of 1.")
 	local function applyShift()
 		local value = math.max(1, math.min(ns.STANDING_MAX, tonumber(shiftBox:GetText()) or 1))
 		ns.GetSettings().shiftClickAmount = value
@@ -336,7 +493,41 @@ local function buildNearbyWindowControl(parent, y)
 		end,
 	})
 
-	local SCALE_ROW_Y = -104
+	-- width works in both modes; height only with a static size, since auto-sizing sets
+	-- its own height from the player count. kept in step with the window's own resize grip
+	local SIZE_ROW_Y = -104
+	local syncingSize = false
+	local _, widthParts = buildSlider(box, {
+		x = 10, y = SIZE_ROW_Y, label = "Width", min = ns.NEARBY_MIN_WIDTH, max = 300, step = 1, width = 150,
+		getValue = function() return math.floor((ns.GetNearbyWindowSize()) + 0.5) end,
+		setValue = function(value)
+			if not syncingSize then
+				ns.SetNearbyWindowSize(value, nil)
+			end
+		end,
+	})
+	local _, heightParts = buildSlider(box, {
+		x = 190, y = SIZE_ROW_Y, label = "Height", min = ns.NEARBY_MIN_HEIGHT, max = 600, step = 1, width = 150,
+		getValue = function() return math.floor(select(2, ns.GetNearbyWindowSize()) + 0.5) end,
+		setValue = function(value)
+			if not syncingSize then
+				ns.SetNearbyWindowSize(nil, value)
+			end
+		end,
+	})
+	local function setHeightEnabled(enabled)
+		for _, part in pairs(heightParts) do
+			setContainerEnabled(part, enabled)
+		end
+	end
+	ns.OnNearbyWindowResized = function(width, height)
+		syncingSize = true
+		widthParts.slider:SetValue(math.floor(width + 0.5))
+		heightParts.slider:SetValue(math.floor(height + 0.5))
+		syncingSize = false
+	end
+
+	local SCALE_ROW_Y = -164
 
 	local growDropdown
 	buildSlider(box, {
@@ -367,23 +558,32 @@ local function buildNearbyWindowControl(parent, y)
 	ns.RefreshNearbyGrowDropdown = function() growDropdown:Refresh() end
 
 	local staticCheckY = SCALE_ROW_Y - SLIDER_BLOCK_HEIGHT - 10
+	-- the row limit only applies while auto-sizing, so it grays out with a fixed size
+	local limitLabel, limitBox
+	local function setLimitEnabled(enabled)
+		setContainerEnabled(limitLabel, enabled)
+		setContainerEnabled(limitBox, enabled)
+	end
 	local staticCheck = buildCheckbox(box, 8, staticCheckY,
-		"Use a fixed, resizable size (drag the corner grip) instead of auto-sizing",
+		"Use a static, resizable size (drag the corner grip) instead of auto-sizing",
 		ns.GetSettings().nearbyStaticSize,
 		function(checked)
 			if ns.SetNearbyStaticSize then ns.SetNearbyStaticSize(checked) end
 			growDropdown:SetEnabled(not checked)
+			setLimitEnabled(not checked)
+			setHeightEnabled(checked)
 		end)
+	setHeightEnabled(ns.GetSettings().nearbyStaticSize)
 	-- growth direction only matters while the window auto-sizes to its content, a
 	-- fixed/resizable window doesn't grow in either direction, so it's meaningless
 	-- while static size is on.
 	growDropdown:SetEnabled(not ns.GetSettings().nearbyStaticSize)
 
-	local limitLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-	limitLabel:SetPoint("TOPLEFT", 10, staticCheckY - 22)
-	limitLabel:SetText("Visible row limit (scrolls beyond this; ignored when using a fixed size)")
+	limitLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	limitLabel:SetPoint("TOPLEFT", 10, staticCheckY - 27)
+	limitLabel:SetText("Visible row limit |cffffffff(scrolls beyond this; ignored when using a static size)|r")
 
-	local limitBox = ns.CreateSmallEditBox(box, 30, 14, true)
+	limitBox = ns.CreateSmallEditBox(box, 30, 14, true)
 	limitBox:SetPoint("LEFT", limitLabel, "RIGHT", 6, 0)
 	limitBox:SetText(tostring(ns.GetSettings().nearbyVisibleRowLimit))
 	local function applyLimit()
@@ -402,8 +602,55 @@ local function buildNearbyWindowControl(parent, y)
 		self:SetText(tostring(ns.GetSettings().nearbyVisibleRowLimit))
 		self:ClearFocus()
 	end)
+	setLimitEnabled(not ns.GetSettings().nearbyStaticSize)
 
-	local height = 220
+	local ROW_CLICK_OPTIONS = {
+		{ value = "details", text = "Details" },
+		{ value = "quickadd", text = "Quick-Add" },
+		{ value = "nothing", text = "Nothing" },
+	}
+
+	local singleLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	singleLabel:SetPoint("TOPLEFT", 10, staticCheckY - 57)
+	singleLabel:SetText("Single click")
+	local singleDropdown = ns.CreateDropdown(box, ROW_CLICK_OPTIONS,
+		function(value) return (ns.GetSettings().nearbySingleClick or "quickadd") == value end,
+		function(value) ns.GetSettings().nearbySingleClick = value end,
+		120, 20)
+	singleDropdown:SetPoint("LEFT", singleLabel, "RIGHT", 6, 0)
+	setTooltip(singleDropdown, "What clicking a player's row in the Nearby window opens.")
+
+	local doubleLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	doubleLabel:SetPoint("LEFT", singleDropdown, "RIGHT", 24, 0)
+	doubleLabel:SetText("Double click")
+	local doubleDropdown = ns.CreateDropdown(box, ROW_CLICK_OPTIONS,
+		function(value) return (ns.GetSettings().nearbyDoubleClick or "details") == value end,
+		function(value) ns.GetSettings().nearbyDoubleClick = value end,
+		120, 20)
+	doubleDropdown:SetPoint("LEFT", doubleLabel, "RIGHT", 6, 0)
+	setTooltip(doubleDropdown, "What double-clicking a player's row opens. Set to Nothing and a single click responds instantly, with no wait for a possible second click.")
+
+	local speedLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	speedLabel:SetPoint("TOPLEFT", 10, staticCheckY - 85)
+	speedLabel:SetText("Double-click speed (ms)")
+	local speedBox = ns.CreateSmallEditBox(box, 40, 14, true)
+	speedBox:SetPoint("LEFT", speedLabel, "RIGHT", 6, 0)
+	speedBox:SetText(tostring(ns.GetSettings().nearbyDoubleClickMs or 300))
+	setTooltip(speedBox, "How quickly the second click has to follow the first to count as a double click. It's also how long a single click waits before acting, so lower feels snappier but needs faster double clicks. Default 300.")
+	local function applySpeed()
+		local value = math.max(100, math.min(1000, tonumber(speedBox:GetText()) or 300))
+		ns.GetSettings().nearbyDoubleClickMs = value
+		speedBox:SetText(tostring(value))
+		speedBox:ClearFocus()
+	end
+	speedBox:SetScript("OnEnterPressed", applySpeed)
+	speedBox:SetScript("OnEditFocusLost", applySpeed)
+	speedBox:SetScript("OnEscapePressed", function(self)
+		self:SetText(tostring(ns.GetSettings().nearbyDoubleClickMs or 300))
+		self:ClearFocus()
+	end)
+
+	local height = 332
 	box:SetHeight(height)
 	return y - height - 6
 end
@@ -496,6 +743,71 @@ local function buildChatMinimapBox(parent, y)
 	return y - height - 6
 end
 
+local TOOLTIP_CONTENT_OPTIONS = {
+	{ value = "rating", text = "Rating" },
+	{ value = "bracket", text = "Bracket" },
+	{ value = "lastNote", text = "Last Note" },
+	{ value = "timesSeen", text = "Times Seen" },
+	{ value = "noteCount", text = "Note Count" },
+}
+
+local function tooltipContentSummary()
+	local content = ns.GetSettings().tooltipContent
+	local names = {}
+	for _, option in ipairs(TOOLTIP_CONTENT_OPTIONS) do
+		if content[option.value] then
+			names[#names + 1] = option.text
+		end
+	end
+	return #names > 0 and table.concat(names, ", ") or "None"
+end
+
+local function buildTooltipContextBox(parent, y)
+	local height = 81
+	local box = createSectionBox(parent, y, height, "Tooltip & Context Menu")
+
+	local tooltipDropdown, tooltipLabel
+	local tooltipCheck = ns.CreateSmallCheckbox(box, 24, ns.GetSettings().tooltipEnabled,
+		function(checked)
+			ns.GetSettings().tooltipEnabled = checked
+			setContainerEnabled(tooltipDropdown, checked)
+			setContainerEnabled(tooltipLabel, checked)
+		end)
+	tooltipCheck:SetPoint("TOPLEFT", 8, -22)
+	ns.AttachTooltip(tooltipCheck, "Adds a line to notable players' tooltips, showing whichever info is selected here.")
+
+	tooltipLabel = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	tooltipLabel:SetPoint("LEFT", tooltipCheck, "RIGHT", 4, 0)
+	tooltipLabel:SetText("Tooltip")
+
+	tooltipDropdown = ns.CreateMultiSelectDropdown(box, TOOLTIP_CONTENT_OPTIONS,
+		function(value) return ns.GetSettings().tooltipContent[value] end,
+		function(value)
+			local content = ns.GetSettings().tooltipContent
+			content[value] = not content[value]
+		end,
+		tooltipContentSummary, 160)
+	tooltipDropdown:SetPoint("LEFT", tooltipLabel, "RIGHT", 8, 0)
+	setContainerEnabled(tooltipDropdown, ns.GetSettings().tooltipEnabled)
+	setContainerEnabled(tooltipLabel, ns.GetSettings().tooltipEnabled)
+
+	local menuLabel
+	local menuCheck = ns.CreateSmallCheckbox(box, 24, ns.GetSettings().contextMenuEnabled,
+		function(checked)
+			ns.GetSettings().contextMenuEnabled = checked
+			setContainerEnabled(menuLabel, checked)
+		end)
+	menuCheck:SetPoint("TOPLEFT", tooltipCheck, "BOTTOMLEFT", 0, -5)
+	ns.AttachTooltip(menuCheck, "Adds Add Note/Show Details/Delete Player to a notable player's right-click menu.")
+
+	menuLabel = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	menuLabel:SetPoint("LEFT", menuCheck, "RIGHT", 4, 0)
+	menuLabel:SetText("Right-click \"Worth Remembering\" menu")
+	setContainerEnabled(menuLabel, ns.GetSettings().contextMenuEnabled)
+
+	return y - height - 6
+end
+
 -- Matches the <Binding name="..."> in Bindings.xml.
 local QUICKNOTE_BINDING = "WR_QUICKNOTE"
 
@@ -518,8 +830,14 @@ end
 local showGlobalHotkeyHelpPopup
 local GLOBAL_HOTKEY_HELP_TEXT
 
+local TAP_ACTION_OPTIONS = {
+	{ value = "quicknote", text = "Quick-Note" },
+	{ value = "history", text = "History Tab" },
+	{ value = "details", text = "Details Tab" },
+}
+
 local function buildKeybindControl(parent, y)
-	local height = 142
+	local height = 176
 	local box, titleText = createSectionBox(parent, y, height, "Global Hotkey")
 
 	local helpButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
@@ -546,16 +864,17 @@ local function buildKeybindControl(parent, y)
 	-- forward-declared: the checkbox's own onClick (defined before this) needs to gray
 	-- the dropdown out, but the dropdown itself is created after the checkbox so its
 	-- label can anchor off the checkbox's own label
-	local fallbackDropdown
+	local fallbackDropdown, fallbackLabel
 
 	local fallbackCheck = ns.CreateSmallCheckbox(box, 24, ns.GetSettings().quickNoteFallbackEnabled,
 		function(checked)
 			ns.GetSettings().quickNoteFallbackEnabled = checked
 			setContainerEnabled(fallbackDropdown, checked)
+			setContainerEnabled(fallbackLabel, checked)
 		end)
 	fallbackCheck:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -12)
 
-	local fallbackLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	fallbackLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 	fallbackLabel:SetPoint("LEFT", fallbackCheck, "RIGHT", 4, 0)
 	fallbackLabel:SetText("With no target, open window to")
 
@@ -568,16 +887,54 @@ local function buildKeybindControl(parent, y)
 		100, 20)
 	fallbackDropdown:SetPoint("LEFT", fallbackLabel, "RIGHT", 8, 0)
 	setContainerEnabled(fallbackDropdown, ns.GetSettings().quickNoteFallbackEnabled)
+	setContainerEnabled(fallbackLabel, ns.GetSettings().quickNoteFallbackEnabled)
+
+	-- forward-declared, same reason as fallbackDropdown/hoverDropdown below
+	local targetDropdown, targetLabel
+
+	local targetCheck = ns.CreateSmallCheckbox(box, 24, ns.GetSettings().tapTargetEnabled,
+		function(checked)
+			ns.GetSettings().tapTargetEnabled = checked
+			setContainerEnabled(targetDropdown, checked)
+			setContainerEnabled(targetLabel, checked)
+		end)
+	targetCheck:SetPoint("TOPLEFT", fallbackCheck, "BOTTOMLEFT", 0, -10)
+	targetLabel = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	targetLabel:SetPoint("LEFT", targetCheck, "RIGHT", 4, 0)
+	targetLabel:SetText("With a target, open")
+
+	targetDropdown = ns.CreateDropdown(box, TAP_ACTION_OPTIONS,
+		function(value) return ns.GetSettings().tapTargetAction == value end,
+		function(value) ns.GetSettings().tapTargetAction = value end,
+		110, 20)
+	targetDropdown:SetPoint("LEFT", targetLabel, "RIGHT", 8, 0)
+	setContainerEnabled(targetDropdown, ns.GetSettings().tapTargetEnabled)
+	setContainerEnabled(targetLabel, ns.GetSettings().tapTargetEnabled)
+
+	-- forward-declared, same reason as fallbackDropdown above
+	local hoverDropdown, hoverLabel
 
 	local hoverCheck = ns.CreateSmallCheckbox(box, 24, ns.GetSettings().quickNoteHoverEnabled,
-		function(checked) ns.GetSettings().quickNoteHoverEnabled = checked end)
+		function(checked)
+			ns.GetSettings().quickNoteHoverEnabled = checked
+			setContainerEnabled(hoverDropdown, checked)
+			setContainerEnabled(hoverLabel, checked)
+		end)
 	-- chained off the checkbox above it (not a guessed fixed y): a checkbox row is
 	-- taller than a plain text line, so a fixed offset sized for the old label-only
 	-- layout overlapped this with the row above it
-	hoverCheck:SetPoint("TOPLEFT", fallbackCheck, "BOTTOMLEFT", 0, -10)
-	local hoverLabel = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	hoverCheck:SetPoint("TOPLEFT", targetCheck, "BOTTOMLEFT", 0, -10)
+	hoverLabel = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 	hoverLabel:SetPoint("LEFT", hoverCheck, "RIGHT", 4, 0)
-	hoverLabel:SetText("Quick-Note a player on hover, not just when targeting")
+	hoverLabel:SetText("While hovering (not targeting), open")
+
+	hoverDropdown = ns.CreateDropdown(box, TAP_ACTION_OPTIONS,
+		function(value) return ns.GetSettings().tapHoverAction == value end,
+		function(value) ns.GetSettings().tapHoverAction = value end,
+		110, 20)
+	hoverDropdown:SetPoint("LEFT", hoverLabel, "RIGHT", 8, 0)
+	setContainerEnabled(hoverDropdown, ns.GetSettings().quickNoteHoverEnabled)
+	setContainerEnabled(hoverLabel, ns.GetSettings().quickNoteHoverEnabled)
 
 	local function stopListening()
 		keyButton:SetText(quickNoteKeyText())
@@ -638,35 +995,57 @@ local function buildLFGIntegrationControl(parent, y)
 	return y - height - 6
 end
 
-local function buildClearDatabaseControl(parent, y)
-	local height = 84
+-- session-only: collapsed on every fresh Options open
+local dangerZoneExpanded = false
+
+local DANGER_ZONE_ACTIONS = {
+	{ text = "Reset UI", popup = "WR_CONFIRM_RESET_UI",
+		hint = "Every window's position, size, scale, opacity, and layout, plus columns and the minimap button. Reloads your UI." },
+	{ text = "Reset All Options", popup = "WR_CONFIRM_RESET_OPTIONS",
+		hint = "Puts every option back to its default. Your players, notes, and standings are kept. Reloads your UI." },
+	{ text = "Clear Non-Notable", popup = "WR_CONFIRM_CLEAR_NONNOTABLE", countNonNotable = true,
+		hint = "Deletes players with exactly 0 standing and no notes (e.g. bare auto-tracked entries)." },
+	{ text = "Clear Database", popup = "WR_CONFIRM_CLEAR_DATABASE",
+		hint = "Deletes every note and standing for every player, on every character. Cannot be undone." },
+}
+local DANGER_ZONE_ROW_HEIGHT = 26
+
+-- returns the next y and the box, so the caller can rebuild it in place on toggle
+local function buildDangerZoneBox(parent, y, onToggle)
+	local height = COLLAPSED_HEIGHT
+	if dangerZoneExpanded then
+		height = height + 2 + #DANGER_ZONE_ACTIONS * DANGER_ZONE_ROW_HEIGHT
+	end
 	local box = createSectionBox(parent, y, height, "Danger Zone")
-
-	local clearButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
-	clearButton:SetSize(130, 20)
-	clearButton:SetText("Clear Database")
-	clearButton:SetPoint("TOPLEFT", 10, -26)
-	clearButton:SetScript("OnClick", function()
-		StaticPopup_Show("WR_CONFIRM_CLEAR_DATABASE")
+	createDisclosure(box, dangerZoneExpanded, function()
+		dangerZoneExpanded = not dangerZoneExpanded
+		onToggle()
 	end)
 
-	local hint = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-	hint:SetPoint("LEFT", clearButton, "RIGHT", 8, 0)
-	hint:SetText("Deletes every note and standing for every player, on every character. Cannot be undone.")
+	if dangerZoneExpanded then
+		local rowY = -COLLAPSED_HEIGHT - 2
+		for _, action in ipairs(DANGER_ZONE_ACTIONS) do
+			local button = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+			button:SetSize(140, 20)
+			button:SetText(action.text)
+			button:SetPoint("TOPLEFT", 10, rowY)
+			button:SetScript("OnClick", function()
+				if action.countNonNotable then
+					StaticPopup_Show(action.popup, ns.CountNonNotablePlayers())
+				else
+					StaticPopup_Show(action.popup)
+				end
+			end)
 
-	local clearNonNotableButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
-	clearNonNotableButton:SetSize(140, 20)
-	clearNonNotableButton:SetText("Clear Non-Notable")
-	clearNonNotableButton:SetPoint("TOPLEFT", clearButton, "BOTTOMLEFT", 0, -6)
-	clearNonNotableButton:SetScript("OnClick", function()
-		StaticPopup_Show("WR_CONFIRM_CLEAR_NONNOTABLE", ns.CountNonNotablePlayers())
-	end)
+			local hint = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+			hint:SetPoint("LEFT", button, "RIGHT", 8, 0)
+			hint:SetText(action.hint)
 
-	local nonNotableHint = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-	nonNotableHint:SetPoint("LEFT", clearNonNotableButton, "RIGHT", 8, 0)
-	nonNotableHint:SetText("Deletes players with exactly 0 standing and no notes (e.g. bare auto-tracked entries).")
+			rowY = rowY - DANGER_ZONE_ROW_HEIGHT
+		end
+	end
 
-	return y - height - 6
+	return y - height - 6, box
 end
 
 local AUTO_PRUNE_CRITERIA_OPTIONS = {
@@ -677,7 +1056,7 @@ local AUTO_PRUNE_CRITERIA_OPTIONS = {
 }
 
 local function buildAutoPruneControl(parent, y)
-	local height = 120
+	local height = 100
 	local box = createSectionBox(parent, y, height, "Auto-Prune (on login)")
 	local settings = ns.GetSettings().autoPrune
 
@@ -763,6 +1142,7 @@ local function createColorSwatch(parent, getColor, setColor)
 	local function refresh()
 		tex:SetColorTexture(getColor())
 	end
+	swatch.Refresh = refresh
 
 	swatch:SetScript("OnClick", function()
 		local r, g, b = getColor()
@@ -796,24 +1176,69 @@ end
 -- original single 9-across row, which truncated longer words ("Blacklisted",
 -- "Acquaintance", "Legendary").
 local FIELDS = {
-	{ group = "positive", index = 1, row = 1, col = 1, range = "0 to 25" },
-	{ group = "positive", index = 2, row = 1, col = 2, range = "26 to 50" },
-	{ group = "positive", index = 3, row = 1, col = 3, range = "51 to 75" },
-	{ group = "positive", index = 4, row = 1, col = 4, range = "76 to 100" },
-	{ group = "zero", row = 2, col = 1, range = "0" },
-	{ group = "negative", index = 1, row = 3, col = 1, range = "-25 to 0" },
-	{ group = "negative", index = 2, row = 3, col = 2, range = "-50 to -26" },
-	{ group = "negative", index = 3, row = 3, col = 3, range = "-75 to -51" },
-	{ group = "negative", index = 4, row = 3, col = 4, range = "-100 to -76" },
+	{ group = "positive", index = 1, row = 1, col = 1 },
+	{ group = "positive", index = 2, row = 1, col = 2 },
+	{ group = "positive", index = 3, row = 1, col = 3 },
+	{ group = "positive", index = 4, row = 1, col = 4 },
+	{ group = "zero", row = 2, col = 1 },
+	{ group = "negative", index = 1, row = 3, col = 1 },
+	{ group = "negative", index = 2, row = 3, col = 2 },
+	{ group = "negative", index = 3, row = 3, col = 3 },
+	{ group = "negative", index = 4, row = 3, col = 4 },
 }
+
+-- each bracket's standing range, from the live neutral band: the first bracket on each
+-- side starts just past it (band 3: neutral is -3 to 3, then 4 to 25 / -4 to -25).
+-- negative ranges read from the mild end outward, matching the positive row
+local BRACKET_LOWER = { 1, 26, 51, 76 }
+local BRACKET_UPPER = { 25, 50, 75, 100 }
+
+local function bracketRangeText(field)
+	local band = ns.GetSettings().neutralBand
+	if field.group == "zero" then
+		return band == 0 and "0" or (-band .. " to " .. band)
+	end
+	local lower = math.max(BRACKET_LOWER[field.index], band + 1)
+	local upper = BRACKET_UPPER[field.index]
+	if lower > upper then
+		return "(inside neutral band)"
+	end
+	if field.group == "negative" then
+		return -lower .. " to " .. -upper
+	end
+	return lower .. " to " .. upper
+end
 local ROW_LABELS = { "Positive", "Neutral", "Negative" }
 local BOX_WIDTH, BOX_GAP, ROW_HEIGHT, LABEL_WIDTH = 120, 10, 44, 70
 -- The edit box is narrower than the column pitch (BOX_WIDTH) so a color swatch fits
 -- beside it within the same column slot, without widening the overall grid.
 local EDIT_WIDTH, SWATCH_SIZE, SWATCH_GAP = 92, 20, 6
 
+-- reset label + picker under the dropdowns, when either is on "Custom"
+local RESET_ROW_HEIGHT = 44
+
+local function presetDisplayName(key)
+	return key:sub(1, 1):upper() .. key:sub(2)
+end
+
+-- a "Reset custom to: [dropdown]" picker. nothing is selected; picking a preset asks
+-- for confirmation, then calls onPick
+local function createResetPicker(parent, options, what, onPick)
+	local picker
+	picker = ns.CreateDropdown(parent, options,
+		function() return false end,
+		function(value, text)
+			picker:SetText("Choose a preset")
+			StaticPopup_Show("WR_CONFIRM_RESET_CUSTOM_BRACKETS", what, text, function() onPick(value) end)
+		end,
+		200)
+	picker:SetText("Choose a preset")
+	return picker
+end
+
 local function buildRepBracketControl(parent)
 	local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+	ns.SetGentleScroll(scroll)
 	scroll:SetPoint("TOPLEFT", 0, 0)
 	scroll:SetPoint("BOTTOMRIGHT", -34, 0)
 
@@ -824,129 +1249,221 @@ local function buildRepBracketControl(parent)
 	end)
 	scrollChild:SetWidth(parent:GetWidth())
 
-	local y = -8
+	-- rebuilt whenever either dropdown switches to or from "Custom", since that adds or
+	-- removes the reset line and shifts everything below it
+	local layout
 
-	local boxHeight = 80 + ROW_HEIGHT * 3 + 10
-	local box = createSectionBox(scrollChild, y, boxHeight, "Reputation Brackets")
-	y = y - boxHeight - 6
-
-	y = buildStandingBox(scrollChild, y)
-	scrollChild:SetHeight(-y + 10)
-
-	-- just the preset name, the always-visible 9 fields below already show the
-	-- actual labels for whichever preset is selected.
-	local options = {}
-	for _, key in ipairs(ns.REP_BRACKET_PRESET_ORDER) do
-		options[#options + 1] = { value = key, text = key:sub(1, 1):upper() .. key:sub(2) }
+	local function relayoutSoon()
+		C_Timer.After(0, layout)
 	end
-	options[#options + 1] = { value = "custom", text = "Custom" }
 
-	-- 9 text fields across 3 rows (Positive/Neutral/Negative), always visible (not
-	-- just for "Custom"), showing whichever preset is currently active. editing any
-	-- field auto-promotes to "Custom" (copying the active preset's labels first, so the
-	-- other 8 fields keep their values).
-	local customRow = CreateFrame("Frame", nil, box)
-	customRow:SetSize(1, ROW_HEIGHT * 3)
-
-	local dropdown -- assigned below, read by field callbacks
-	local boxes = {}
-
-	local function getFieldValue(field, labels)
-		if field.group == "zero" then
-			return labels.zero
+	function layout()
+		for _, child in ipairs({ scrollChild:GetChildren() }) do
+			child:Hide()
+			child:SetParent(nil)
 		end
-		return labels[field.group][field.index]
-	end
 
-	local function refreshFieldDisplay()
-		local labels = ns.GetActiveBracketLabels()
-		for i, field in ipairs(FIELDS) do
-			boxes[i]:SetText(getFieldValue(field, labels))
-		end
-	end
-
-	local function promoteToCustom()
 		local settings = ns.GetSettings()
-		if settings.repBracketPreset == "custom" then
-			return
+		local labelsCustom = settings.repBracketPreset == "custom"
+		local colorsCustom = settings.repBracketColorPreset == "custom"
+		local showResetRow = labelsCustom or colorsCustom
+
+		local y = -8
+		local boxHeight = 80 + ROW_HEIGHT * 3 + 10 + (showResetRow and RESET_ROW_HEIGHT or 0)
+		local box = createSectionBox(scrollChild, y, boxHeight, "Reputation Brackets")
+		y = y - boxHeight - 6
+
+		y = buildStandingBox(scrollChild, y)
+		scrollChild:SetHeight(-y + 10)
+
+		-- just the preset name, the always-visible 9 fields below already show the
+		-- actual labels for whichever preset is selected.
+		local options = {}
+		for _, key in ipairs(ns.REP_BRACKET_PRESET_ORDER) do
+			options[#options + 1] = { value = key, text = presetDisplayName(key) }
 		end
-		local active = ns.GetActiveBracketLabels()
-		settings.repBracketCustomLabels = {
-			zero = active.zero,
-			positive = { active.positive[1], active.positive[2], active.positive[3], active.positive[4] },
-			negative = { active.negative[1], active.negative[2], active.negative[3], active.negative[4] },
-		}
-		settings.repBracketPreset = "custom"
-		dropdown:SetText("Custom")
-	end
+		local labelPresetOptions = { unpack(options) }
+		options[#options + 1] = { value = "custom", text = "Custom" }
 
-	local function setFieldValue(field, text)
-		promoteToCustom()
-		local labels = ns.GetSettings().repBracketCustomLabels
-		if field.group == "zero" then
-			labels.zero = text
-		else
-			labels[field.group][field.index] = text
+		local colorOptions = {}
+		for _, key in ipairs(ns.REP_COLOR_PRESET_ORDER) do
+			colorOptions[#colorOptions + 1] = { value = key, text = ns.REP_COLOR_PRESETS[key].label }
 		end
-	end
+		local colorPresetOptions = { unpack(colorOptions) }
+		colorOptions[#colorOptions + 1] = { value = "custom", text = "Custom" }
 
-	for _, rowIndex in ipairs({ 1, 2, 3 }) do
-		local rowLabel = customRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-		rowLabel:SetWidth(LABEL_WIDTH)
-		rowLabel:SetJustifyH("LEFT")
-		rowLabel:SetText(ROW_LABELS[rowIndex])
-		rowLabel:SetPoint("TOPLEFT", customRow, "TOPLEFT", 6, -(rowIndex - 1) * ROW_HEIGHT - 14)
-	end
+		-- 9 text fields across 3 rows (Positive/Neutral/Negative), always visible (not
+		-- just for "Custom"), showing whichever preset is currently active. editing any
+		-- field auto-promotes to "Custom" (copying the active preset's labels first, so
+		-- the other 8 fields keep their values).
+		local customRow = CreateFrame("Frame", nil, box)
+		customRow:SetSize(1, ROW_HEIGHT * 3)
 
-	for i, field in ipairs(FIELDS) do
-		local rangeLabel = customRow:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-		rangeLabel:SetText(field.range)
+		local boxes = {}
+		local swatches = {}
+		local rangeLabels = {}
+		-- the neutral band (Standing box, same tab) shifts these ranges
+		ns.RefreshBracketRangeLabels = function()
+			for _, entry in ipairs(rangeLabels) do
+				entry.label:SetText(bracketRangeText(entry.field))
+			end
+		end
 
-		local box = ns.CreateSmallEditBox(customRow, EDIT_WIDTH, 16)
-		local x = LABEL_WIDTH + (field.col - 1) * (BOX_WIDTH + BOX_GAP)
-		local y = -(field.row - 1) * ROW_HEIGHT - 14
-		box:SetPoint("TOPLEFT", customRow, "TOPLEFT", x, y)
-		rangeLabel:SetPoint("BOTTOMLEFT", box, "TOPLEFT", 2, 2)
-		box:SetScript("OnEnterPressed", function(self)
-			setFieldValue(field, self:GetText())
-			self:ClearFocus()
-			refreshAllBracketDisplays()
-		end)
-		box:SetScript("OnEditFocusLost", function(self)
-			setFieldValue(field, self:GetText())
-			refreshAllBracketDisplays()
-		end)
-		boxes[i] = box
+		local function getFieldValue(field, labels)
+			if field.group == "zero" then
+				return labels.zero
+			end
+			return labels[field.group][field.index]
+		end
 
-		-- no color to edit for the neutral/zero bracket, it's always a fixed grey
-		-- (see ns.GetBracket), not part of settings.repBracketColors.
-		if field.group ~= "zero" then
+		local function refreshFieldDisplay()
+			local labels = ns.GetActiveBracketLabels()
+			for i, field in ipairs(FIELDS) do
+				boxes[i]:SetText(getFieldValue(field, labels))
+			end
+		end
+
+		local function refreshSwatches()
+			for _, swatch in ipairs(swatches) do
+				swatch.Refresh()
+			end
+		end
+
+		local function promoteToCustom()
+			if settings.repBracketPreset == "custom" then
+				return
+			end
+			local active = ns.GetActiveBracketLabels()
+			settings.repBracketCustomLabels = {
+				zero = active.zero,
+				positive = { active.positive[1], active.positive[2], active.positive[3], active.positive[4] },
+				negative = { active.negative[1], active.negative[2], active.negative[3], active.negative[4] },
+			}
+			settings.repBracketPreset = "custom"
+			relayoutSoon()
+		end
+
+		local function setFieldValue(field, text)
+			promoteToCustom()
+			local labels = settings.repBracketCustomLabels
+			if field.group == "zero" then
+				labels.zero = text
+			else
+				labels[field.group][field.index] = text
+			end
+		end
+
+		for _, rowIndex in ipairs({ 1, 2, 3 }) do
+			local rowLabel = customRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+			rowLabel:SetWidth(LABEL_WIDTH)
+			rowLabel:SetJustifyH("LEFT")
+			rowLabel:SetText(ROW_LABELS[rowIndex])
+			rowLabel:SetPoint("TOPLEFT", customRow, "TOPLEFT", 6, -(rowIndex - 1) * ROW_HEIGHT - 14)
+		end
+
+		for i, field in ipairs(FIELDS) do
+			local rangeLabel = customRow:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+			rangeLabel:SetText(bracketRangeText(field))
+			rangeLabels[#rangeLabels + 1] = { label = rangeLabel, field = field }
+
+			local editBox = ns.CreateSmallEditBox(customRow, EDIT_WIDTH, 16)
+			local x = LABEL_WIDTH + (field.col - 1) * (BOX_WIDTH + BOX_GAP)
+			local rowY = -(field.row - 1) * ROW_HEIGHT - 14
+			editBox:SetPoint("TOPLEFT", customRow, "TOPLEFT", x, rowY)
+			rangeLabel:SetPoint("BOTTOMLEFT", editBox, "TOPLEFT", 2, 2)
+			editBox:SetScript("OnEnterPressed", function(self)
+				setFieldValue(field, self:GetText())
+				self:ClearFocus()
+				refreshAllBracketDisplays()
+			end)
+			editBox:SetScript("OnEditFocusLost", function(self)
+				setFieldValue(field, self:GetText())
+				refreshAllBracketDisplays()
+			end)
+			boxes[i] = editBox
+
 			local swatch = createColorSwatch(customRow,
-				function() return unpack(ns.GetSettings().repBracketColors[field.group][field.index]) end,
+				function() return unpack(ns.GetBracketColor(field.group, field.index)) end,
 				function(r, g, b)
-					ns.GetSettings().repBracketColors[field.group][field.index] = { r, g, b }
+					local wasCustom = settings.repBracketColorPreset == "custom"
+					ns.SetBracketColor(field.group, field.index, r, g, b)
 					refreshAllBracketDisplays()
+					if not wasCustom then
+						relayoutSoon()
+					end
 				end)
-			swatch:SetPoint("LEFT", box, "RIGHT", SWATCH_GAP, 0)
+			swatch:SetPoint("LEFT", editBox, "RIGHT", SWATCH_GAP, 0)
+			swatches[#swatches + 1] = swatch
 		end
+
+		local presetLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		presetLabel:SetPoint("TOPLEFT", 10, -24)
+		presetLabel:SetText("Preset")
+
+		local dropdown = ns.CreateDropdown(box, options,
+			function(value) return settings.repBracketPreset == value end,
+			function(value)
+				local changedCustom = (value == "custom") ~= labelsCustom
+				settings.repBracketPreset = value
+				refreshFieldDisplay()
+				refreshAllBracketDisplays()
+				if changedCustom then
+					relayoutSoon()
+				end
+			end,
+			200)
+		dropdown:SetPoint("TOPLEFT", presetLabel, "BOTTOMLEFT", 4, -4)
+
+		local colorsLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		colorsLabel:SetPoint("LEFT", presetLabel, "LEFT", 240, 0)
+		colorsLabel:SetText("Colors")
+
+		local colorDropdown = ns.CreateDropdown(box, colorOptions,
+			function(value) return settings.repBracketColorPreset == value end,
+			function(value)
+				local changedCustom = (value == "custom") ~= colorsCustom
+				ns.ApplyBracketColorPreset(value)
+				refreshSwatches()
+				refreshAllBracketDisplays()
+				if changedCustom then
+					relayoutSoon()
+				end
+			end,
+			200)
+		colorDropdown:SetPoint("TOPLEFT", colorsLabel, "BOTTOMLEFT", 4, -4)
+
+		-- under whichever dropdown is on "Custom": overwrites that custom set with a
+		-- built-in one, staying on Custom so it can be edited from there
+		if labelsCustom then
+			local labelReset = createResetPicker(box, labelPresetOptions, "labels", function(key)
+				ns.ResetCustomBracketLabels(key)
+				refreshFieldDisplay()
+				refreshAllBracketDisplays()
+			end)
+			labelReset:SetPoint("TOPLEFT", dropdown, "BOTTOMLEFT", 0, -22)
+			local labelResetText = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+			labelResetText:SetPoint("BOTTOMLEFT", labelReset, "TOPLEFT", -4, 3)
+			labelResetText:SetText("Reset custom labels to:")
+		end
+
+		if colorsCustom then
+			local colorReset = createResetPicker(box, colorPresetOptions, "colors", function(key)
+				ns.ResetCustomBracketColors(key)
+				refreshSwatches()
+				refreshAllBracketDisplays()
+			end)
+			colorReset:SetPoint("TOPLEFT", colorDropdown, "BOTTOMLEFT", 0, -22)
+			local colorResetText = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+			colorResetText:SetPoint("BOTTOMLEFT", colorReset, "TOPLEFT", -4, 3)
+			colorResetText:SetText("Reset custom colors to:")
+		end
+
+		customRow:SetPoint("TOPLEFT", dropdown, "BOTTOMLEFT", -4, -16 - (showResetRow and RESET_ROW_HEIGHT or 0))
+
+		refreshFieldDisplay()
 	end
 
-	local presetLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-	presetLabel:SetPoint("TOPLEFT", 10, -24)
-	presetLabel:SetText("Preset")
-
-	dropdown = ns.CreateDropdown(box, options,
-		function(value) return ns.GetSettings().repBracketPreset == value end,
-		function(value)
-			ns.GetSettings().repBracketPreset = value
-			refreshFieldDisplay()
-			refreshAllBracketDisplays()
-		end,
-		200)
-	dropdown:SetPoint("TOPLEFT", presetLabel, "BOTTOMLEFT", 4, -4)
-	customRow:SetPoint("TOPLEFT", dropdown, "BOTTOMLEFT", -4, -16)
-
-	refreshFieldDisplay()
+	layout()
 end
 
 -- wrapped in a scroll frame, enough rows have accumulated (opacity/scale, formats,
@@ -956,8 +1473,12 @@ end
 -- single top-level cursor through fixed-height boxes, not derived from any previous
 -- box's live GetHeight(), so it avoids the chained-anchor mismatch that template
 -- children (e.g. UICheckButtonTemplate) cause elsewhere.
+-- session-only: every General box starts collapsed on a fresh Options open
+local generalBoxesExpanded = {}
+
 local function buildGeneralPanel(parent)
 	local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+	ns.SetGentleScroll(scroll)
 	scroll:SetPoint("TOPLEFT", 0, 0)
 	scroll:SetPoint("BOTTOMRIGHT", -34, 0)
 
@@ -968,17 +1489,32 @@ local function buildGeneralPanel(parent)
 	end)
 	scrollChild:SetWidth(parent:GetWidth())
 
-	local y = -8
-	y = buildKeybindControl(scrollChild, y)
-	y = buildWindowBox(scrollChild, y)
-	y = buildNearbyWindowControl(scrollChild, y)
-	y = buildNameplateIconControl(scrollChild, y)
-	y = buildChatMinimapBox(scrollChild, y)
-	y = buildLFGIntegrationControl(scrollChild, y)
-	y = buildAutoPruneControl(scrollChild, y)
-	y = buildClearDatabaseControl(scrollChild, y)
+	-- every box is collapsible, so the whole panel rebuilds when one is toggled
+	local boxes = {
+		{ key = "keybind", build = buildKeybindControl },
+		{ key = "window", build = buildWindowBox },
+		{ key = "nearby", build = buildNearbyWindowControl },
+		{ key = "nameplate", build = buildNameplateIconControl },
+		{ key = "chatMinimap", build = buildChatMinimapBox },
+		{ key = "tooltip", build = buildTooltipContextBox },
+		{ key = "lfg", build = buildLFGIntegrationControl },
+		{ key = "autoPrune", build = buildAutoPruneControl },
+	}
 
-	scrollChild:SetHeight(-y + 10)
+	local layout
+	function layout()
+		for _, child in ipairs({ scrollChild:GetChildren() }) do
+			child:Hide()
+			child:SetParent(nil)
+		end
+		local y = -8
+		for _, def in ipairs(boxes) do
+			y = wrapCollapsible(generalBoxesExpanded, def.key, def.build, scrollChild, y, layout)
+		end
+		y = buildDangerZoneBox(scrollChild, y, layout)
+		scrollChild:SetHeight(-y + 10)
+	end
+	layout()
 end
 
 -- built lazily (once) since it's only ever needed after the user clicks a "?" button.
@@ -1108,7 +1644,7 @@ local function showMacroHelpPopup()
 	macroHelpPopup:Show()
 end
 
-GLOBAL_HOTKEY_HELP_TEXT = "Tap: quick-notes your target, or whoever you're hovering if nothing's targeted (both toggleable below). With neither, opens the window to the tab set below, or does nothing if that's turned off.\n\n"
+GLOBAL_HOTKEY_HELP_TEXT = "Tap: runs the action set below for your target, or (if hover's enabled) whoever you're hovering if nothing's targeted. With neither, opens the window to the tab set below, or does nothing if that's turned off.\n\n"
 	.. "Hold: opens the radial quick-add menu at the cursor, if enabled (Options > Radial Menu).\n\n"
 	.. "Hovering a Group Finder listing: pulls up the Players tab filtered to that group's roster instead, if Group Finder integration is enabled (below)."
 
@@ -1130,8 +1666,44 @@ showGlobalHotkeyHelpPopup = function()
 	globalHotkeyHelpPopup:Show()
 end
 
--- One row's checkbox + indented Rep gain/Note/(optional) Cooldown fields. Shared by
--- buildAutoAddBox's top-level rows and its collapsible emote rows.
+-- edit box bound to option[field]: applies on Enter/focus loss, reverts on Escape
+local function bindTextBox(editBox, option, field)
+	editBox:SetText(option[field] or "")
+	local function apply()
+		option[field] = editBox:GetText()
+		editBox:ClearFocus()
+	end
+	editBox:SetScript("OnEnterPressed", apply)
+	editBox:SetScript("OnEditFocusLost", apply)
+	editBox:SetScript("OnEscapePressed", function(self)
+		self:SetText(option[field] or "")
+		self:ClearFocus()
+	end)
+end
+
+local function bindMinutesBox(editBox, option, field)
+	editBox:SetText(tostring(option[field]))
+	local function apply()
+		local value = math.max(0, tonumber(editBox:GetText()) or option[field])
+		option[field] = value
+		editBox:SetText(tostring(value))
+		editBox:ClearFocus()
+	end
+	editBox:SetScript("OnEnterPressed", apply)
+	editBox:SetScript("OnEditFocusLost", apply)
+	editBox:SetScript("OnEscapePressed", function(self)
+		self:SetText(tostring(option[field]))
+		self:ClearFocus()
+	end)
+end
+
+local function autoTrackRowHeight(def)
+	local lines = (def.hasMinGrouped or def.hasDuelResult) and 2 or 1
+	return 30 + lines * 20
+end
+
+-- One row's checkbox + indented Rep gain/Note/(optional) Cooldown fields, plus an
+-- optional second line. Shared by the General and Directed Emotes boxes.
 local function buildAutoTrackRow(box, def, option, rowY)
 	local detailRow
 
@@ -1172,59 +1744,23 @@ local function buildAutoTrackRow(box, def, option, rowY)
 	noteLabel:SetPoint("LEFT", gainBox, "RIGHT", 16, 0)
 	noteLabel:SetText("Note")
 
-	-- quest has both Cooldown and Min. time grouped, too much for one line together, so
-	-- its Cooldown field moves to its own third line (below) instead of sharing this one
-	local cooldownOnOwnLine = def.hasCooldown and def.hasMinGrouped
-
-	-- same size as the quick-add preset note boxes (Options > Presets), narrower when a
-	-- Cooldown field follows it on the same line. blank means no note gets logged, just
-	-- the rep change.
-	local noteBox = ns.CreateSmallEditBox(detailRow, (def.hasCooldown and not cooldownOnOwnLine) and 160 or 240, 16)
+	-- blank means no note gets logged, just the rep change
+	local noteBox = ns.CreateSmallEditBox(detailRow, 240, 16)
 	noteBox:SetJustifyH("LEFT")
 	noteBox:SetPoint("LEFT", noteLabel, "RIGHT", 6, 0)
-	noteBox:SetText(option.note or "")
+	bindTextBox(noteBox, option, "note")
 
-	local function applyNote()
-		option.note = noteBox:GetText()
-		noteBox:ClearFocus()
-	end
-	noteBox:SetScript("OnEnterPressed", applyNote)
-	noteBox:SetScript("OnEditFocusLost", applyNote)
-	noteBox:SetScript("OnEscapePressed", function(self)
-		self:SetText(option.note or "")
-		self:ClearFocus()
-	end)
-
-	local function buildCooldownField(anchorPoint, anchorFrame, anchorRelativePoint, offsetX, offsetY)
+	if def.hasCooldown then
 		local cooldownLabel = detailRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-		cooldownLabel:SetPoint(anchorPoint, anchorFrame, anchorRelativePoint, offsetX, offsetY)
+		cooldownLabel:SetPoint("LEFT", noteBox, "RIGHT", 16, 0)
 		cooldownLabel:SetText("Cooldown")
 
 		local cooldownBox = ns.CreateSmallEditBox(detailRow, 30, 14, true)
 		cooldownBox:SetPoint("LEFT", cooldownLabel, "RIGHT", 6, 0)
-		cooldownBox:SetText(tostring(option.cooldownMinutes))
+		bindMinutesBox(cooldownBox, option, "cooldownMinutes")
 		setTooltip(cooldownBox, "Minutes before this can log again for the same player.")
-
-		local function applyCooldown()
-			local value = math.max(0, tonumber(cooldownBox:GetText()) or option.cooldownMinutes)
-			option.cooldownMinutes = value
-			cooldownBox:SetText(tostring(value))
-			cooldownBox:ClearFocus()
-		end
-		cooldownBox:SetScript("OnEnterPressed", applyCooldown)
-		cooldownBox:SetScript("OnEditFocusLost", applyCooldown)
-		cooldownBox:SetScript("OnEscapePressed", function(self)
-			self:SetText(tostring(option.cooldownMinutes))
-			self:ClearFocus()
-		end)
 	end
 
-	if def.hasCooldown and not cooldownOnOwnLine then
-		buildCooldownField("LEFT", noteBox, "RIGHT", 16, 0)
-	end
-
-	-- second line: only grouped-time-gated triggers (currently just "quest") need this,
-	-- cramming it onto the first line alongside Cooldown ran too wide for the box
 	if def.hasMinGrouped then
 		local minGroupedLabel = detailRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 		minGroupedLabel:SetPoint("TOPLEFT", 0, -20)
@@ -1232,198 +1768,117 @@ local function buildAutoTrackRow(box, def, option, rowY)
 
 		local minGroupedBox = ns.CreateSmallEditBox(detailRow, 30, 14, true)
 		minGroupedBox:SetPoint("LEFT", minGroupedLabel, "RIGHT", 6, 0)
-		minGroupedBox:SetText(tostring(option.minGroupedMinutes))
+		bindMinutesBox(minGroupedBox, option, "minGroupedMinutes")
 		setTooltip(minGroupedBox, "Only logs for a party/raid member once they've been grouped with you this long. 0 logs for anyone currently grouped, regardless of when they joined.")
-
-		local function applyMinGrouped()
-			local value = math.max(0, tonumber(minGroupedBox:GetText()) or option.minGroupedMinutes)
-			option.minGroupedMinutes = value
-			minGroupedBox:SetText(tostring(value))
-			minGroupedBox:ClearFocus()
-		end
-		minGroupedBox:SetScript("OnEnterPressed", applyMinGrouped)
-		minGroupedBox:SetScript("OnEditFocusLost", applyMinGrouped)
-		minGroupedBox:SetScript("OnEscapePressed", function(self)
-			self:SetText(tostring(option.minGroupedMinutes))
-			self:ClearFocus()
-		end)
 	end
 
-	-- third line: quest's Cooldown, moved here since it doesn't fit on the first line
-	-- alongside the wide note box AND Min. time grouped below it on the second
-	if cooldownOnOwnLine then
-		buildCooldownField("TOPLEFT", detailRow, "TOPLEFT", 0, -40)
+	if def.hasDuelResult then
+		local resultLabel = detailRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		resultLabel:SetPoint("TOPLEFT", 0, -20)
+		resultLabel:SetText("{{duelresult}}")
+
+		local victoryLabel = detailRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		victoryLabel:SetPoint("LEFT", resultLabel, "RIGHT", 12, 0)
+		victoryLabel:SetText("Victory")
+		local victoryBox = ns.CreateSmallEditBox(detailRow, 110, 16)
+		victoryBox:SetJustifyH("LEFT")
+		victoryBox:SetPoint("LEFT", victoryLabel, "RIGHT", 6, 0)
+		bindTextBox(victoryBox, option, "victoryText")
+		setTooltip(victoryBox, "What {{duelresult}} becomes in the note when you win.")
+
+		local lossLabel = detailRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		lossLabel:SetPoint("LEFT", victoryBox, "RIGHT", 16, 0)
+		lossLabel:SetText("Loss")
+		local lossBox = ns.CreateSmallEditBox(detailRow, 110, 16)
+		lossBox:SetJustifyH("LEFT")
+		lossBox:SetPoint("LEFT", lossLabel, "RIGHT", 6, 0)
+		bindTextBox(lossBox, option, "lossText")
+		setTooltip(lossBox, "What {{duelresult}} becomes in the note when you lose or flee.")
 	end
 
 	setContainerEnabled(detailRow, option.enabled)
 end
 
--- session-only: collapsed on every fresh Options open, not persisted to settings
+-- session-only: reset on every fresh Options open, not persisted to settings
+local autoTrackGeneralExpanded = false
 local autoTrackEmotesExpanded = false
 
-local function buildAutoAddBox(parent, y, onToggle)
+-- a collapsible box of buildAutoTrackRow rows
+local function buildAutoTrackRowsBox(parent, y, title, defs, expanded, onClick)
 	local settings = ns.GetSettings().autoTrack
 
-	local topDefs, emoteDefs = {}, {}
-	for _, def in ipairs(ns.AUTO_TRACK_DEFS) do
-		if def.isEmote then
-			emoteDefs[#emoteDefs + 1] = def
-		else
-			topDefs[#topDefs + 1] = def
+	local height = COLLAPSED_HEIGHT
+	if expanded then
+		for _, def in ipairs(defs) do
+			height = height + autoTrackRowHeight(def)
 		end
 	end
 
-	-- only "quest" has hasMinGrouped, needing a taller row: Min. time grouped on its own
-	-- line, plus Cooldown moved to a 3rd line underneath that (too much for one line
-	-- alongside the wide note box otherwise)
-	local function rowHeightFor(def)
-		local lines = 1
-		if def.hasMinGrouped then
-			lines = lines + 1
-		end
-		if def.hasCooldown and def.hasMinGrouped then
-			lines = lines + 1
-		end
-		return 30 + lines * 20
-	end
+	local box = createSectionBox(parent, y, height, title)
+	createDisclosure(box, expanded, onClick)
 
-	local DISCLOSURE_HEIGHT = 22
-	local topHeight, emoteHeight = 0, 0
-	for _, def in ipairs(topDefs) do
-		topHeight = topHeight + rowHeightFor(def)
-	end
-	for _, def in ipairs(emoteDefs) do
-		emoteHeight = emoteHeight + rowHeightFor(def)
-	end
-	local height = 24 + topHeight + DISCLOSURE_HEIGHT + (autoTrackEmotesExpanded and emoteHeight or 0) + 10
-	local box, titleText = createSectionBox(parent, y, height, "Auto-Add")
-
-	local helpButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
-	helpButton:SetSize(20, 20)
-	helpButton:SetText("?")
-	helpButton:SetPoint("LEFT", titleText, "RIGHT", 4, 0)
-	helpButton:SetScript("OnClick", showPresetHelpPopup)
-	ns.AttachHookTooltip(helpButton, presetHelpPlainText())
-
-	local rowY = -24
-	for _, def in ipairs(topDefs) do
-		buildAutoTrackRow(box, def, settings[def.key], rowY)
-		rowY = rowY - rowHeightFor(def)
-	end
-
-	local disclosure = CreateFrame("Button", nil, box)
-	disclosure:SetSize(260, 18)
-	disclosure:SetPoint("TOPLEFT", 6, rowY)
-
-	-- same tinted-UIPanelButtonTemplate look as the Players tab's +/- buttons, same red
-	-- tint as the minus button there
-	local toggleButton = CreateFrame("Button", nil, disclosure, "UIPanelButtonTemplate")
-	toggleButton:SetSize(20, 18)
-	toggleButton:SetPoint("LEFT", 0, 0)
-	local toggleTint = toggleButton:CreateTexture(nil, "ARTWORK", nil, -1)
-	toggleTint:SetPoint("TOPLEFT", 3, -3)
-	toggleTint:SetPoint("BOTTOMRIGHT", -3, 3)
-	toggleTint:SetColorTexture(0.6, 0.18, 0.18, 0.65)
-
-	local disclosureText = disclosure:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-	disclosureText:SetPoint("LEFT", toggleButton, "RIGHT", 6, 0)
-	disclosureText:SetText("Directed Emotes (Wave/Thank/Bow)")
-
-	local function onToggleClick()
-		autoTrackEmotesExpanded = not autoTrackEmotesExpanded
-		if onToggle then
-			onToggle()
-		end
-	end
-	toggleButton:SetText(autoTrackEmotesExpanded and "-" or "+")
-	toggleButton:SetScript("OnClick", onToggleClick)
-	disclosure:SetScript("OnClick", onToggleClick)
-	rowY = rowY - DISCLOSURE_HEIGHT
-
-	if autoTrackEmotesExpanded then
-		for _, def in ipairs(emoteDefs) do
+	if expanded then
+		local rowY = -COLLAPSED_HEIGHT
+		for _, def in ipairs(defs) do
 			buildAutoTrackRow(box, def, settings[def.key], rowY)
-			rowY = rowY - rowHeightFor(def)
+			rowY = rowY - autoTrackRowHeight(def)
 		end
 	end
 
 	return y - height - 6
 end
 
--- session-only: collapsed on every fresh Options open, same as autoTrackEmotesExpanded
-local dungeonTrackingExpanded = false
-local ROLE_PRESET_ROW_HEIGHT = 22
-local DUNGEON_TRACKING_ROWS = {
-	disclosureGap = 10,
-	autoLogRow = 26,
-	autoLogDetail = 44,
-	surveyRow = 26,
-	surveyDetail = 44,
-	presetsGap = 10,
-	presetsLabel = 18,
-	presetsHeader = 14,
-	addButtonRow = 24,
-	bottomPad = 10,
-}
-
--- separate from the generic autoTrack rows above: dungeon/raid tracking needs more
--- custom controls (a survey toggle, a note prefix, an editable role-preset list) than
--- buildAutoTrackRow's generic layout supports, so it's its own section with its own
--- collapsible disclosure, same idea as Directed Emotes above but for the whole block.
-local function buildDungeonTrackingBox(parent, y, onToggle)
-	local trackSettings = ns.GetSettings().dungeonTracking
-	local DISCLOSURE_HEIGHT = 22
-
-	local height = 24 + DISCLOSURE_HEIGHT
-	if dungeonTrackingExpanded then
-		local r = DUNGEON_TRACKING_ROWS
-		height = height + r.disclosureGap + r.autoLogRow + r.autoLogDetail + r.surveyRow + r.surveyDetail
-			+ r.presetsGap + r.presetsLabel + r.presetsHeader + #trackSettings.rolePresets * ROLE_PRESET_ROW_HEIGHT
-			+ r.addButtonRow + r.bottomPad
-	end
-
-	local box = createSectionBox(parent, y, height, "Dungeon/Raid Tracking")
-	-- this box lives in the same scroll child as the (unrelated) autoTrack rows above
-	-- it, which get blanket-disabled by the "Enable auto-add module" master switch.
-	-- dungeonTracking is its own independent system now, so the caller re-enables this
-	-- box afterward via the returned function, rather than inheriting that switch's state.
-	local refreshEnabled = function() setContainerEnabled(box, true) end
-
-	local disclosure = CreateFrame("Button", nil, box)
-	disclosure:SetSize(260, 18)
-	disclosure:SetPoint("TOPLEFT", 6, -24)
-
-	-- same tinted-UIPanelButtonTemplate look as Directed Emotes' own disclosure
-	local toggleButton = CreateFrame("Button", nil, disclosure, "UIPanelButtonTemplate")
-	toggleButton:SetSize(20, 18)
-	toggleButton:SetPoint("LEFT", 0, 0)
-	local toggleTint = toggleButton:CreateTexture(nil, "ARTWORK", nil, -1)
-	toggleTint:SetPoint("TOPLEFT", 3, -3)
-	toggleTint:SetPoint("BOTTOMRIGHT", -3, 3)
-	toggleTint:SetColorTexture(0.6, 0.18, 0.18, 0.65)
-
-	local disclosureText = disclosure:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-	disclosureText:SetPoint("LEFT", toggleButton, "RIGHT", 6, 0)
-	disclosureText:SetText(dungeonTrackingExpanded and "Hide settings" or "Show settings")
-
-	local function onToggleClick()
-		dungeonTrackingExpanded = not dungeonTrackingExpanded
-		if onToggle then
-			onToggle()
+local function buildAutoTrackGeneralBox(parent, y, onToggle)
+	local defs = {}
+	for _, def in ipairs(ns.AUTO_TRACK_DEFS) do
+		if not def.isEmote then
+			defs[#defs + 1] = def
 		end
 	end
-	toggleButton:SetText(dungeonTrackingExpanded and "-" or "+")
-	toggleButton:SetScript("OnClick", onToggleClick)
-	disclosure:SetScript("OnClick", onToggleClick)
+	return buildAutoTrackRowsBox(parent, y, "General", defs, autoTrackGeneralExpanded, function()
+		autoTrackGeneralExpanded = not autoTrackGeneralExpanded
+		onToggle()
+	end)
+end
+
+local function buildAutoTrackEmotesBox(parent, y, onToggle)
+	local defs = {}
+	for _, def in ipairs(ns.AUTO_TRACK_DEFS) do
+		if def.isEmote then
+			defs[#defs + 1] = def
+		end
+	end
+	return buildAutoTrackRowsBox(parent, y, "Directed Emotes", defs, autoTrackEmotesExpanded, function()
+		autoTrackEmotesExpanded = not autoTrackEmotesExpanded
+		onToggle()
+	end)
+end
+
+-- session-only: collapsed on every fresh Options open, same as autoTrackEmotesExpanded
+local dungeonTrackingExpanded = false
+local DUNGEON_AUTOLOG_HEIGHT = 26 + 44 + 6
+
+-- dungeon/raid auto-logging. the post-run survey is manual and lives on its own tab
+-- (buildSurveyPanel)
+local function buildDungeonTrackingBox(parent, y, onToggle)
+	local autoLog = ns.GetSettings().dungeonTracking.autoLog
+
+	local height = COLLAPSED_HEIGHT + (dungeonTrackingExpanded and DUNGEON_AUTOLOG_HEIGHT or 0)
+	local box = createSectionBox(parent, y, height, "Dungeon/Raid Tracking")
+	-- re-applies this box's own enabled/grayed state, called by the panel's layout
+	local refreshEnabled = function() setContainerEnabled(box, true) end
+
+	createDisclosure(box, dungeonTrackingExpanded, function()
+		dungeonTrackingExpanded = not dungeonTrackingExpanded
+		onToggle()
+	end)
 
 	if not dungeonTrackingExpanded then
 		return y - height - 6, refreshEnabled
 	end
 
-	local r = DUNGEON_TRACKING_ROWS
-	local rowY = -24 - DISCLOSURE_HEIGHT - r.disclosureGap
+	local rowY = -COLLAPSED_HEIGHT
 
-	local autoLog = trackSettings.autoLog
 	local autoLogDetail
 	local autoLogCheck = buildCheckbox(box, 8, rowY, "Auto-log dungeon/raid runs", autoLog.enabled,
 		function(checked)
@@ -1434,9 +1889,7 @@ local function buildDungeonTrackingBox(parent, y, onToggle)
 		"Logs an entry for each party/raid member when you enter the instance together, or (with the checkbox below) when you leave it instead.")
 
 	autoLogDetail = CreateFrame("Frame", nil, box)
-	-- not indented, same gap/layout as surveyDetail below it: those two sections read as
-	-- parallel siblings, not one nested under its own checkbox
-	autoLogDetail:SetPoint("TOPLEFT", 8, rowY - 26)
+	autoLogDetail:SetPoint("TOPLEFT", 44, rowY - 24)
 	autoLogDetail:SetSize(1, 1)
 
 	local gainLabel = autoLogDetail:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
@@ -1461,49 +1914,40 @@ local function buildDungeonTrackingBox(parent, y, onToggle)
 	local noteLabel = autoLogDetail:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 	noteLabel:SetPoint("LEFT", gainBox, "RIGHT", 16, 0)
 	noteLabel:SetText("Note")
-	local noteBox = ns.CreateSmallEditBox(autoLogDetail, 200, 16)
+	local noteBox = ns.CreateSmallEditBox(autoLogDetail, 240, 16)
 	noteBox:SetJustifyH("LEFT")
 	noteBox:SetPoint("LEFT", noteLabel, "RIGHT", 6, 0)
-	noteBox:SetText(autoLog.note or "")
-	local function applyNote()
-		autoLog.note = noteBox:GetText()
-		noteBox:ClearFocus()
-	end
-	noteBox:SetScript("OnEnterPressed", applyNote)
-	noteBox:SetScript("OnEditFocusLost", applyNote)
-	noteBox:SetScript("OnEscapePressed", function(self)
-		self:SetText(autoLog.note or "")
-		self:ClearFocus()
-	end)
+	bindTextBox(noteBox, autoLog, "note")
 
-	-- a checkbox's own taller glyph reads as cramped against the Rep gain/Note line
-	-- above at the same -20 offset every other detail line uses, so this one gets a bit
-	-- more room; the section's total height budget stays the same (r.autoLogDetail
-	-- isn't touched), so the gap before the next section (Show a survey popup) shrinks
-	-- to match instead of also needing an edit
 	buildCheckbox(autoLogDetail, 0, -22, "Only log on completion (otherwise logs on entering)",
 		autoLog.onlyOnCompletion,
 		function(checked) autoLog.onlyOnCompletion = checked end)
 
 	setContainerEnabled(autoLogDetail, autoLog.enabled)
-	rowY = rowY - r.autoLogRow - r.autoLogDetail
+	refreshEnabled = function()
+		setContainerEnabled(box, true)
+		setContainerEnabled(autoLogDetail, autoLog.enabled)
+	end
 
-	local survey = trackSettings.survey
+	return y - height - 6, refreshEnabled
+end
+
+local function buildSurveySettingsBox(parent, y)
+	local survey = ns.GetSettings().dungeonTracking.survey
+	local height = 24 + 26 + 44 + 4
+	local box = createSectionBox(parent, y, height, "Dungeon/Raid Survey")
+
 	local surveyDetail
-	local surveyCheck = buildCheckbox(box, 8, rowY, "Show a survey popup on completion", survey.enabled,
+	local surveyCheck = buildCheckbox(box, 8, -22, "Show a survey popup on completion", survey.enabled,
 		function(checked)
 			survey.enabled = checked
 			setContainerEnabled(surveyDetail, checked)
 		end)
 	setTooltip(surveyCheck,
-		"Pops a window listing your party/raid when you leave the instance, with a note box, role-preset dropdown, and standing +/- per member.")
+		"Pops a window listing your party/raid when you leave the instance, with a note box, preset dropdown, and standing +/- per member.")
 
 	surveyDetail = CreateFrame("Frame", nil, box)
-	-- not indented under the checkbox like autoLogDetail's Rep gain/Note is: those read
-	-- naturally as parameters of a single-line action, but Note prefix sitting alone,
-	-- indented, under a checkbox with nothing else on its line just looked cramped/odd.
-	-- flush-left instead, reading as its own sibling setting.
-	surveyDetail:SetPoint("TOPLEFT", 8, rowY - 26)
+	surveyDetail:SetPoint("TOPLEFT", 8, -22 - 26)
 	surveyDetail:SetSize(1, 1)
 
 	local prefixLabel = surveyDetail:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
@@ -1512,17 +1956,7 @@ local function buildDungeonTrackingBox(parent, y, onToggle)
 	local prefixBox = ns.CreateSmallEditBox(surveyDetail, 220, 16)
 	prefixBox:SetJustifyH("LEFT")
 	prefixBox:SetPoint("LEFT", prefixLabel, "RIGHT", 6, 0)
-	prefixBox:SetText(survey.notePrefix or "")
-	local function applyPrefix()
-		survey.notePrefix = prefixBox:GetText()
-		prefixBox:ClearFocus()
-	end
-	prefixBox:SetScript("OnEnterPressed", applyPrefix)
-	prefixBox:SetScript("OnEditFocusLost", applyPrefix)
-	prefixBox:SetScript("OnEscapePressed", function(self)
-		self:SetText(survey.notePrefix or "")
-		self:ClearFocus()
-	end)
+	bindTextBox(prefixBox, survey, "notePrefix")
 	setTooltip(prefixBox,
 		"Prepended to whatever you type in each survey row's note box. Supports {{loc}}/{{yourlvl}}/{{theirlvl}} like any other note template.")
 
@@ -1534,20 +1968,19 @@ local function buildDungeonTrackingBox(parent, y, onToggle)
 		"Same as checking \"Don't ask me again\" and choosing Open Survey on that prompt. The prompt's own checkbox sets this too.")
 
 	setContainerEnabled(surveyDetail, survey.enabled)
-	refreshEnabled = function()
-		setContainerEnabled(box, true)
-		setContainerEnabled(autoLogDetail, autoLog.enabled)
-		setContainerEnabled(surveyDetail, survey.enabled)
-	end
-	rowY = rowY - r.surveyRow - r.surveyDetail - r.presetsGap
+	return y - height - 6
+end
 
-	local presetsLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-	presetsLabel:SetPoint("TOPLEFT", 8, rowY)
-	presetsLabel:SetText("Survey role presets")
-	setTooltip(presetsLabel,
+local ROLE_PRESET_ROW_HEIGHT = 22
+
+local function buildRolePresetsBox(parent, y, onChange)
+	local rolePresets = ns.GetSettings().dungeonTracking.rolePresets
+	local height = 24 + 14 + #rolePresets * ROLE_PRESET_ROW_HEIGHT + 24 + 8
+	local box, titleText = createSectionBox(parent, y, height, "Survey Presets")
+	setTooltip(titleText,
 		"Shown in a dropdown next to each survey row's note box; picking one fills that row's note and rep delta (both still editable after).")
-	rowY = rowY - r.presetsLabel
 
+	local rowY = -22
 	local labelHeader = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
 	labelHeader:SetPoint("TOPLEFT", 8, rowY)
 	labelHeader:SetText("Label")
@@ -1560,43 +1993,19 @@ local function buildDungeonTrackingBox(parent, y, onToggle)
 	repHeader:SetPoint("LEFT", noteHeader, "LEFT", 248, 0)
 	repHeader:SetText("Rep")
 
-	rowY = rowY - r.presetsHeader
+	rowY = rowY - 14
 
 	-- same widths as the Quick-Add Presets tab's own editor (buildPresetsPanel), so the
 	-- two preset-list editors read as the same kind of control
-	for i, preset in ipairs(trackSettings.rolePresets) do
+	for i, preset in ipairs(rolePresets) do
 		local labelBox = ns.CreateSmallEditBox(box, 112, 16)
 		labelBox:SetPoint("TOPLEFT", 8, rowY)
-		labelBox:SetText(preset.label)
-		local function applyLabel(self)
-			preset.label = self:GetText()
-		end
-		labelBox:SetScript("OnEnterPressed", function(self)
-			applyLabel(self)
-			self:ClearFocus()
-		end)
-		labelBox:SetScript("OnEditFocusLost", applyLabel)
-		labelBox:SetScript("OnEscapePressed", function(self)
-			self:SetText(preset.label)
-			self:ClearFocus()
-		end)
+		bindTextBox(labelBox, preset, "label")
 
 		local textBox = ns.CreateSmallEditBox(box, 240, 16)
 		textBox:SetJustifyH("LEFT")
 		textBox:SetPoint("LEFT", labelBox, "RIGHT", 8, 0)
-		textBox:SetText(preset.text or "")
-		local function applyText(self)
-			preset.text = self:GetText()
-		end
-		textBox:SetScript("OnEnterPressed", function(self)
-			applyText(self)
-			self:ClearFocus()
-		end)
-		textBox:SetScript("OnEditFocusLost", applyText)
-		textBox:SetScript("OnEscapePressed", function(self)
-			self:SetText(preset.text or "")
-			self:ClearFocus()
-		end)
+		bindTextBox(textBox, preset, "text")
 
 		local deltaBox = ns.CreateSmallEditBox(box, 34, 16)
 		deltaBox:SetPoint("LEFT", textBox, "RIGHT", 8, 0)
@@ -1618,10 +2027,8 @@ local function buildDungeonTrackingBox(parent, y, onToggle)
 		deleteButton:SetText("X")
 		deleteButton:SetPoint("LEFT", deltaBox, "RIGHT", 8, 0)
 		deleteButton:SetScript("OnClick", function()
-			table.remove(trackSettings.rolePresets, i)
-			if onToggle then
-				onToggle()
-			end
+			table.remove(rolePresets, i)
+			onChange()
 		end)
 
 		rowY = rowY - ROLE_PRESET_ROW_HEIGHT
@@ -1629,14 +2036,199 @@ local function buildDungeonTrackingBox(parent, y, onToggle)
 
 	local addPresetButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
 	addPresetButton:SetSize(100, 20)
-	addPresetButton:SetText("+ Add Role")
-	addPresetButton:SetPoint("TOPLEFT", 8, rowY)
+	addPresetButton:SetText("+ Add Preset")
+	addPresetButton:SetPoint("TOPLEFT", 8, rowY - 2)
 	addPresetButton:SetScript("OnClick", function()
-		table.insert(trackSettings.rolePresets, { label = "New Role", text = "", delta = 0 })
-		if onToggle then
-			onToggle()
-		end
+		table.insert(rolePresets, { label = "New Role", text = "", delta = 0 })
+		onChange()
 	end)
+
+	return y - height - 6
+end
+
+-- manual, so not under Auto-Track and not affected by its module switch
+local function buildSurveyPanel(parent)
+	local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+	ns.SetGentleScroll(scroll)
+	scroll:SetPoint("TOPLEFT", 0, 0)
+	scroll:SetPoint("BOTTOMRIGHT", -34, 0)
+
+	local scrollChild = CreateFrame("Frame", nil, scroll)
+	scroll:SetScrollChild(scrollChild)
+	scroll:SetScript("OnSizeChanged", function(_, width)
+		scrollChild:SetWidth(width)
+	end)
+	scrollChild:SetWidth(parent:GetWidth())
+
+	-- rebuilt from scratch when a role preset is added/removed, since that changes the
+	-- presets box's height
+	local function layout()
+		for _, child in ipairs({ scrollChild:GetChildren() }) do
+			child:Hide()
+			child:SetParent(nil)
+		end
+		local y = -8
+		y = buildSurveySettingsBox(scrollChild, y)
+		y = buildRolePresetsBox(scrollChild, y, layout)
+		scrollChild:SetHeight(-y + 10)
+	end
+
+	layout()
+	-- the survey prompt itself can change these settings, so re-read them on every visit
+	parent:HookScript("OnShow", layout)
+end
+
+local recentAlliesExpanded = false
+
+local RECENT_ALLY_TYPE_OPTIONS = {}
+for _, def in ipairs(ns.RECENT_ALLY_TYPE_DEFS) do
+	RECENT_ALLY_TYPE_OPTIONS[#RECENT_ALLY_TYPE_OPTIONS + 1] = { value = def.key, text = def.label }
+end
+
+local function recentAllyTypeSummary()
+	local types = ns.GetSettings().recentAllies.types
+	local selected = {}
+	for _, option in ipairs(RECENT_ALLY_TYPE_OPTIONS) do
+		if types[option.value] then
+			selected[#selected + 1] = option.text
+		end
+	end
+	if #selected == 0 then
+		return "None"
+	elseif #selected == #RECENT_ALLY_TYPE_OPTIONS then
+		return "All"
+	elseif #selected <= 2 then
+		return table.concat(selected, ", ")
+	end
+	return #selected .. " types"
+end
+
+local function buildRecentAlliesBox(parent, y, onToggle)
+	local settings = ns.GetSettings().recentAllies
+	local supported = ns.IsRecentAlliesSupported()
+	local WARNING_HEIGHT = supported and 0 or 30
+	local DETAIL_HEIGHT = 51
+
+	local height = COLLAPSED_HEIGHT
+	if recentAlliesExpanded then
+		height = height + WARNING_HEIGHT + 26 + DETAIL_HEIGHT + 10
+	end
+
+	local box = createSectionBox(parent, y, height, "Recent Allies")
+	local refreshEnabled = function() setContainerEnabled(box, true) end
+
+	createDisclosure(box, recentAlliesExpanded, function()
+		recentAlliesExpanded = not recentAlliesExpanded
+		onToggle()
+	end)
+
+	if not recentAlliesExpanded then
+		return y - height - 6, refreshEnabled
+	end
+
+	local rowY = -COLLAPSED_HEIGHT
+
+	if not supported then
+		local warning = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		warning:SetPoint("TOPLEFT", 8, rowY)
+		warning:SetPoint("RIGHT", -10, 0)
+		warning:SetJustifyH("LEFT")
+		warning:SetWordWrap(true)
+		warning:SetTextColor(1, 0.25, 0.25)
+		warning:SetText("Blizzard's Recent Allies system isn't available on this client, so this can't log anything.")
+		rowY = rowY - WARNING_HEIGHT
+	end
+
+	local detail
+	local enableCheck = buildCheckbox(box, 8, rowY, "Log interactions from Blizzard's Recent Allies list", settings.enabled,
+		function(checked)
+			settings.enabled = checked
+			if checked then
+				ns.ResetRecentAlliesWatermark()
+			end
+			setContainerEnabled(detail, checked)
+		end)
+	setTooltip(enableCheck,
+		"The game keeps its own history of players you've done things with (dungeons, boss kills, trades, etc). This logs an entry whenever a new one of the selected kinds shows up there. Only interactions from after you turn this on are logged.\n\nThe game only refreshes that list when you open its Recent Allies tab (Social window), or on login, so entries appear then, dated to when the interaction actually happened.")
+
+	detail = CreateFrame("Frame", nil, box)
+	detail:SetPoint("TOPLEFT", 8, rowY - 29)
+	detail:SetSize(1, 1)
+
+	local gainLabel = detail:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	gainLabel:SetPoint("TOPLEFT", 0, 0)
+	gainLabel:SetText("Rep gain")
+	local gainBox = ns.CreateSmallEditBox(detail, 34, 14)
+	gainBox:SetPoint("LEFT", gainLabel, "RIGHT", 6, 0)
+	gainBox:SetText(tostring(settings.repGain))
+	local function applyGain()
+		local value = math.max(-ns.STANDING_MAX, math.min(ns.STANDING_MAX, tonumber(gainBox:GetText()) or 0))
+		settings.repGain = value
+		gainBox:SetText(tostring(value))
+		gainBox:ClearFocus()
+	end
+	gainBox:SetScript("OnEnterPressed", applyGain)
+	gainBox:SetScript("OnEditFocusLost", applyGain)
+	gainBox:SetScript("OnEscapePressed", function(self)
+		self:SetText(tostring(settings.repGain))
+		self:ClearFocus()
+	end)
+
+	local noteLabel = detail:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	noteLabel:SetPoint("LEFT", gainBox, "RIGHT", 16, 0)
+	noteLabel:SetText("Note")
+	local noteBox = ns.CreateSmallEditBox(detail, 220, 16)
+	noteBox:SetJustifyH("LEFT")
+	noteBox:SetPoint("LEFT", noteLabel, "RIGHT", 6, 0)
+	noteBox:SetText(settings.note or "")
+	local function applyNote()
+		settings.note = noteBox:GetText()
+		noteBox:ClearFocus()
+	end
+	noteBox:SetScript("OnEnterPressed", applyNote)
+	noteBox:SetScript("OnEditFocusLost", applyNote)
+	noteBox:SetScript("OnEscapePressed", function(self)
+		self:SetText(settings.note or "")
+		self:ClearFocus()
+	end)
+	setTooltip(noteBox,
+		"{{interaction}} becomes the game's own description of what happened (e.g. \"Fought Together\"). {{loc}} is where it happened. {{yourlvl}}/{{theirlvl}} work too.")
+
+	local typesLabel = detail:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	typesLabel:SetPoint("TOPLEFT", 0, -26)
+	typesLabel:SetText("Log for")
+	local typesDropdown = ns.CreateMultiSelectDropdown(detail, RECENT_ALLY_TYPE_OPTIONS,
+		function(value) return settings.types[value] end,
+		function(value) settings.types[value] = not settings.types[value] end,
+		recentAllyTypeSummary, 200)
+	typesDropdown:SetPoint("LEFT", typesLabel, "RIGHT", 8, 0)
+
+	local cooldownLabel = detail:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	cooldownLabel:SetPoint("LEFT", typesDropdown, "RIGHT", 16, 0)
+	cooldownLabel:SetText("Cooldown")
+	local cooldownBox = ns.CreateSmallEditBox(detail, 30, 14, true)
+	cooldownBox:SetPoint("LEFT", cooldownLabel, "RIGHT", 6, 0)
+	cooldownBox:SetText(tostring(settings.cooldownMinutes))
+	setTooltip(cooldownBox, "Minutes before the same kind of interaction can log again for the same player.")
+	local function applyCooldown()
+		local value = math.max(0, tonumber(cooldownBox:GetText()) or settings.cooldownMinutes)
+		settings.cooldownMinutes = value
+		cooldownBox:SetText(tostring(value))
+		cooldownBox:ClearFocus()
+	end
+	cooldownBox:SetScript("OnEnterPressed", applyCooldown)
+	cooldownBox:SetScript("OnEditFocusLost", applyCooldown)
+	cooldownBox:SetScript("OnEscapePressed", function(self)
+		self:SetText(tostring(settings.cooldownMinutes))
+		self:ClearFocus()
+	end)
+
+	refreshEnabled = function()
+		setContainerEnabled(box, true)
+		setContainerEnabled(enableCheck, supported)
+		setContainerEnabled(enableCheck.label, supported)
+		setContainerEnabled(detail, supported and settings.enabled)
+	end
 
 	return y - height - 6, refreshEnabled
 end
@@ -1711,11 +2303,16 @@ local function buildSeenCountBox(parent, y)
 	return y - height - 6
 end
 
+-- session-only, every box starts collapsed (same as the General tab's)
+local autoTrackBoxesExpanded = {}
+
 local function buildAutoTrackPanel(parent)
 	local settings = ns.GetSettings().autoTrack
 
 	local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
-	scroll:SetPoint("TOPLEFT", 0, -28)
+
+	ns.SetGentleScroll(scroll)
+	scroll:SetPoint("TOPLEFT", 0, 0)
 	scroll:SetPoint("BOTTOMRIGHT", -34, 0)
 
 	local scrollChild = CreateFrame("Frame", nil, scroll)
@@ -1725,29 +2322,66 @@ local function buildAutoTrackPanel(parent)
 	end)
 	scrollChild:SetWidth(parent:GetWidth())
 
-	buildCheckbox(parent, 16, -8, "Enable auto-add module",
+	-- scrolls with the boxes below it, but survives layout()'s rebuilds and is never
+	-- grayed by the master switch it holds
+	local HEADER_HEIGHT = 56
+	local header = CreateFrame("Frame", nil, scrollChild)
+	header:SetPoint("TOPLEFT", 0, 0)
+	header:SetSize(1, HEADER_HEIGHT)
+
+	local layout
+
+	local enableCheck = buildCheckbox(header, 16, -8, "Enable auto-add module",
 		settings.enabled,
 		function(checked)
 			settings.enabled = checked
-			setContainerEnabled(scrollChild, checked)
+			layout()
 		end)
+	setTooltip(enableCheck, "Completely enable/disable all automatic entries.")
 
-	-- rebuilds every box from scratch, since the emote disclosure toggle changes
-	-- buildAutoAddBox's own height and everything below it has to shift to match
-	local function layout()
+	-- covers every note field on this panel, so it sits up here rather than in one box
+	local helpButton = CreateFrame("Button", nil, header, "UIPanelButtonTemplate")
+	helpButton:SetSize(20, 20)
+	helpButton:SetText("?")
+	helpButton:SetPoint("TOPLEFT", enableCheck, "BOTTOMLEFT", 2, -4)
+	helpButton:SetScript("OnClick", showPresetHelpPopup)
+	ns.AttachHookTooltip(helpButton, presetHelpPlainText())
+
+	local helpLabel = header:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	helpLabel:SetPoint("LEFT", helpButton, "RIGHT", 6, 0)
+	helpLabel:SetText("Notes")
+
+	-- rebuilds every box from scratch, since expanding/collapsing a box changes its
+	-- height and everything below it has to shift to match
+	function layout()
 		for _, child in ipairs({ scrollChild:GetChildren() }) do
-			child:Hide()
-			child:SetParent(nil)
+			if child ~= header then
+				child:Hide()
+				child:SetParent(nil)
+			end
 		end
-		local y = -8
-		y = buildAutoAddBox(scrollChild, y, layout)
+		local y = -HEADER_HEIGHT
+		y = buildAutoTrackGeneralBox(scrollChild, y, layout)
+		y = buildAutoTrackEmotesBox(scrollChild, y, layout)
 		local dungeonTrackingRefresh
 		y, dungeonTrackingRefresh = buildDungeonTrackingBox(scrollChild, y, layout)
-		y = buildNearbyAutoAddBox(scrollChild, y)
-		y = buildSeenCountBox(scrollChild, y)
+		local recentAlliesRefresh
+		y, recentAlliesRefresh = buildRecentAlliesBox(scrollChild, y, layout)
+		y = wrapCollapsible(autoTrackBoxesExpanded, "nearby", buildNearbyAutoAddBox, scrollChild, y, layout)
+		y = wrapCollapsible(autoTrackBoxesExpanded, "seenCount", buildSeenCountBox, scrollChild, y, layout)
 		scrollChild:SetHeight(-y + 10)
-		setContainerEnabled(scrollChild, settings.enabled)
-		dungeonTrackingRefresh()
+		-- each row/box already grayed its own unchecked parts while building, so only
+		-- the off state needs a blanket pass; a blanket enable would un-gray them
+		if settings.enabled then
+			dungeonTrackingRefresh()
+			recentAlliesRefresh()
+		else
+			for _, child in ipairs({ scrollChild:GetChildren() }) do
+				if child ~= header then
+					setContainerEnabled(child, false)
+				end
+			end
+		end
 	end
 
 	layout()
@@ -2016,7 +2650,7 @@ end
 
 local function buildEntryAlertBox(parent, y)
 	local entrySound = ns.GetSettings().newEntrySound
-	local height = 130
+	local height = 105
 	local box = createSectionBox(parent, y, height, "New Entry Alert")
 
 	-- only "Menu Open" carries over from the nearby-alert SOUNDKIT list, the rest
@@ -2037,7 +2671,7 @@ local function buildEntryAlertBox(parent, y)
 end
 
 local function buildSoundChannelBox(parent, y)
-	local height = 74
+	local height = 59
 	local box = createSectionBox(parent, y, height, "Sound Channel")
 
 	local channelOptions = {}
@@ -2060,6 +2694,7 @@ end
 -- own sound pickers, add up to more than the window's minimum height.
 local function buildNearbySoundControl(parent)
 	local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+	ns.SetGentleScroll(scroll)
 	scroll:SetPoint("TOPLEFT", 0, 0)
 	scroll:SetPoint("BOTTOMRIGHT", -34, 0)
 
@@ -2123,6 +2758,8 @@ local function buildPresetsPanel(parent)
 	headerDelta:SetText("Rep")
 
 	local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+
+	ns.SetGentleScroll(scroll)
 	scroll:SetPoint("TOPLEFT", 0, headerY - 16)
 	scroll:SetPoint("BOTTOMRIGHT", -34, 0)
 	local rowsFrame = CreateFrame("Frame", nil, scroll)
@@ -2225,33 +2862,24 @@ local function buildPresetsPanel(parent)
 
 	rebuild()
 
-	local function setRestEnabled(enabled)
-		setContainerEnabled(addButton, enabled)
-		setContainerEnabled(headerLabel, enabled)
-		setContainerEnabled(headerText, enabled)
-		setContainerEnabled(headerDelta, enabled)
-		setContainerEnabled(rowsFrame, enabled)
-	end
-
+	-- only hides the popup's buttons; the presets stay editable since the radial menu
+	-- uses them either way
 	buildCheckbox(box, 8, -24, "Show one-click preset buttons in the quick-add popup",
 		settings.enabled,
-		function(checked)
-			settings.enabled = checked
-			setRestEnabled(checked)
-		end)
-	setRestEnabled(settings.enabled)
+		function(checked) settings.enabled = checked end)
 end
 
 -- single-radial mode (second radial off) offers the whole preset list for ring 1 (and
--- GetRadialPresetSet's own default/cap matches: whole list uncapped). dual-radial mode
--- splits the options themselves by delta sign too, not just the default selection, so a
--- positive-only preset can't even be picked for the negative ring or vice versa.
+-- GetRadialPresetSet's own default/cap matches: whole list uncapped). dual-radial
+-- Positive/Negative mode splits the options themselves by delta sign too, not just the
+-- default selection, so a positive-only preset can't even be picked for the negative
+-- ring or vice versa. Everything mode offers the whole list to both.
 local function radialPresetOptions(ring)
 	local options = {}
-	local secondEnabled = ns.GetSettings().radialMenu.secondEnabled
+	local signSplit = ns.IsRadialSignSplit()
 	for _, preset in ipairs(ns.GetSettings().quickPresets.items) do
 		local include = true
-		if secondEnabled then
+		if signSplit then
 			local delta = preset.delta or 0
 			include = (ring == 1 and delta > 0) or (ring == 2 and delta < 0)
 		end
@@ -2286,7 +2914,7 @@ end
 -- whatever the smart default had selected
 local function toggleRadialPreset(ring, label)
 	local settings = ns.GetSettings().radialMenu
-	local key = ring == 1 and "radial1Labels" or "radial2Labels"
+	local key = ns.RadialLabelsKey(ring)
 	if not settings[key] then
 		local list = {}
 		for _, preset in ipairs(ns.GetRadialPresetSet(ring)) do
@@ -2328,7 +2956,7 @@ end
 
 local function buildRadialMenuPanel(parent)
 	local settings = ns.GetSettings().radialMenu
-	local height = 388
+	local height = 368
 	local box = createSectionBox(parent, -8, height, "Radial Menu")
 
 	local hint = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
@@ -2383,6 +3011,19 @@ local function buildRadialMenuPanel(parent)
 		self:ClearFocus()
 	end)
 
+	local nameColorLabel = body:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	nameColorLabel:SetPoint("LEFT", holdBox, "RIGHT", 30, 0)
+	nameColorLabel:SetText("Character name color")
+	local nameColorDropdown = ns.CreateDropdown(body, {
+		{ value = "bracket", text = "Bracket color" },
+		{ value = "class", text = "Class color" },
+	},
+		function(value) return (settings.nameColor or "class") == value end,
+		function(value) settings.nameColor = value end,
+		130, 20)
+	nameColorDropdown:SetPoint("LEFT", nameColorLabel, "RIGHT", 6, 0)
+	ns.AttachHookTooltip(nameColorDropdown, "Color of the target's name shown above the radial: their standing's bracket color, or their class color.")
+
 	buildCheckbox(body, 8, -24, "Disable the radial wheel while in combat",
 		settings.disableInCombat,
 		function(checked) settings.disableInCombat = checked end)
@@ -2398,26 +3039,45 @@ local function buildRadialMenuPanel(parent)
 	local ring1Label = body:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 	ring1Label:SetPoint("TOPLEFT", 8, -122)
 
-	local function updateRing1LabelText()
-		ring1Label:SetText(settings.secondEnabled and "Radial 1 (positive) presets" or "Radial presets")
-	end
-	updateRing1LabelText()
+	local ring2Label
+	local ring1Dropdown, ring2Dropdown
 
-	buildCheckbox(body, 8, -96, "Enable a second (negative) radial",
+	local function updateRingLabels()
+		local signed = settings.splitMode ~= "all"
+		if not settings.secondEnabled then
+			ring1Label:SetText("Radial presets")
+		else
+			ring1Label:SetText(signed and "Radial 1 (positive) presets" or "Radial 1 presets")
+		end
+		if ring2Label then
+			ring2Label:SetText(signed and "Radial 2 (negative) presets" or "Radial 2 presets")
+		end
+	end
+
+	local function onRadialModeChanged()
+		refillRadialOptions(ring1Options, 1)
+		refillRadialOptions(ring2Options, 2)
+		updateRingLabels()
+		for _, dropdown in ipairs({ ring1Dropdown, ring2Dropdown }) do
+			if dropdown.RefreshText then
+				dropdown.RefreshText()
+			end
+		end
+		if ns.RefreshRadialMenuBinding then
+			ns.RefreshRadialMenuBinding()
+		end
+	end
+
+	local secondCheck = buildCheckbox(body, 8, -96, "Enable a second radial",
 		settings.secondEnabled,
 		function(checked)
 			settings.secondEnabled = checked
 			setContainerEnabled(secondBody, checked)
-			refillRadialOptions(ring1Options, 1)
-			refillRadialOptions(ring2Options, 2)
-			updateRing1LabelText()
-			if ns.RefreshRadialMenuBinding then
-				ns.RefreshRadialMenuBinding()
-			end
+			onRadialModeChanged()
 		end)
 
 	ring1Options = radialPresetOptions(1)
-	local ring1Dropdown = ns.CreateMultiSelectDropdown(body, ring1Options,
+	ring1Dropdown = ns.CreateMultiSelectDropdown(body, ring1Options,
 		function(value) return isRadialPresetSelected(1, value) end,
 		function(value) toggleRadialPresetAndRefresh(1, value) end,
 		function() return radialPresetSummary(1) end,
@@ -2435,9 +3095,28 @@ local function buildRadialMenuPanel(parent)
 	secondBody:SetPoint("BOTTOMRIGHT", 0, 0)
 	secondBody:SetSize(1, 1)
 
+	-- on the checkbox's own line, but part of secondBody so it grays out with it
+	local splitLabel = secondBody:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	splitLabel:SetPoint("LEFT", secondCheck.label, "RIGHT", 20, 0)
+	splitLabel:SetText("Multiple radial behavior:")
+
+	local splitDropdown = ns.CreateDropdown(secondBody, {
+		{ value = "signed", text = "Positive/Negative" },
+		{ value = "all", text = "Everything" },
+	},
+		function(value) return (settings.splitMode or "signed") == value end,
+		function(value)
+			settings.splitMode = value
+			onRadialModeChanged()
+		end,
+		150, 20)
+	splitDropdown:SetPoint("LEFT", splitLabel, "RIGHT", 6, 0)
+	ns.AttachHookTooltip(splitDropdown,
+		"Positive/Negative: radial 1 only offers presets that add rep, radial 2 only ones that take it away.\n\nEverything: either radial can hold any preset.\n\nEach choice remembers its own preset selections, so switching back and forth doesn't lose either.")
+
 	local modLabel = secondBody:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 	modLabel:SetPoint("TOPLEFT", 8, 0)
-	modLabel:SetText("Modifier for the negative radial")
+	modLabel:SetText("Modifier for the second radial")
 
 	local modDropdown = ns.CreateDropdown(secondBody, {
 		{ value = "CTRL", text = "Ctrl" },
@@ -2454,12 +3133,12 @@ local function buildRadialMenuPanel(parent)
 		100, 20)
 	modDropdown:SetPoint("TOPLEFT", modLabel, "BOTTOMLEFT", 2, -4)
 
-	local ring2Label = secondBody:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	ring2Label = secondBody:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 	ring2Label:SetPoint("TOPLEFT", modDropdown, "BOTTOMLEFT", 0, -14)
-	ring2Label:SetText("Radial 2 (negative) presets")
+	updateRingLabels()
 
 	ring2Options = radialPresetOptions(2)
-	local ring2Dropdown = ns.CreateMultiSelectDropdown(secondBody, ring2Options,
+	ring2Dropdown = ns.CreateMultiSelectDropdown(secondBody, ring2Options,
 		function(value) return isRadialPresetSelected(2, value) end,
 		function(value) toggleRadialPresetAndRefresh(2, value) end,
 		function() return radialPresetSummary(2) end,
@@ -2490,6 +3169,7 @@ local SUB_TABS = {
 	{ label = "General", build = buildGeneralPanel },
 	{ label = "Reputation", build = buildRepBracketControl },
 	{ label = "Auto-Track", build = buildAutoTrackPanel },
+	{ label = "Survey", build = buildSurveyPanel },
 	{ label = "Alerts", build = buildNearbySoundControl },
 	{ label = "Presets", build = buildPresetsPanel },
 	{ label = "Radial Menu", build = buildRadialMenuPanel },

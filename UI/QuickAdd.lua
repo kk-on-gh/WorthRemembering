@@ -137,7 +137,7 @@ end
 
 -- vertical chain below the presets area, in anchor order. named constants so
 -- popup.relayout can sum them to resize the whole popup.
-local PRESETS_TOP_Y = -92
+local PRESETS_TOP_Y = -70
 local AFTER_PRESETS_GAP = 14
 local NOTE_LABEL_HEIGHT = 12
 local NOTE_LABEL_GAP = 4
@@ -172,19 +172,22 @@ local function createPopup()
 	-- Lets Escape close this window, like Blizzard's own panels.
 	tinsert(UISpecialFrames, "WRQuickAddPopup")
 	popup:SetSize(360, 460)
-	popup:SetPoint("CENTER")
 	-- above the main window (HIGH strata). toplevel so clicking this popup while Edit
 	-- Entry is also open brings it to the front.
 	popup:SetFrameStrata("DIALOG")
 	popup:SetToplevel(true)
 	popup:SetClampedToScreen(true)
 	popup:SetScale(ns.GetSettings().uiScale)
-	popup:SetMovable(true)
-	popup:EnableMouse(true)
-	popup:RegisterForDrag("LeftButton")
-	popup:SetScript("OnDragStart", popup.StartMoving)
-	popup:SetScript("OnDragStop", popup.StopMovingOrSizing)
+	ns.RestorePopupPosition(popup, "quickAdd")
+	ns.MakePopupDraggable(popup, "quickAdd")
 	popup:SetScript("OnMouseDown", function() popup:Raise() end)
+	-- closing without saving discards whatever was typed, so it doesn't carry over to
+	-- the next player
+	popup:SetScript("OnHide", function()
+		popup.noteBox:SetText("")
+		popup.repBox:SetText("")
+		popup.featuredCheck:SetChecked(false)
+	end)
 	popup.relayout = relayout
 	-- border only, no bgFile, see Overview.lua's mainFrame backdrop. opacity comes
 	-- from the separate fill texture below.
@@ -209,10 +212,6 @@ local function createPopup()
 	popup.standing = popup:CreateFontString(nil, "ARTWORK", "GameFontNormal")
 	popup.standing:SetPoint("TOP", popup.title, "BOTTOM", 0, -6)
 
-	popup.hint = popup:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-	popup.hint:SetPoint("TOP", popup.standing, "BOTTOM", 0, -22)
-	popup.hint:SetText("Note and/or standing delta - fill either or both")
-
 	-- one-click preset buttons. layoutPresets resizes this (floored at PRESET_MIN_ROWS)
 	-- to however many rows are used, then calls relayout() to push the rest down.
 	popup.presetsArea = CreateFrame("Frame", nil, popup)
@@ -220,7 +219,7 @@ local function createPopup()
 	popup.presetsArea:SetPoint("TOPLEFT", popup, "TOPLEFT", 20, PRESETS_TOP_Y)
 
 	-- fixed absolute position, set for real by relayout() once the presets height is
-	-- known. not chained off popup.hint since everything above here is centered text.
+	-- known. not chained off the text above since it's all centered.
 	popup.noteLabel = popup:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 	popup.noteLabel:SetPoint("TOPLEFT", popup, "TOPLEFT", 38, PRESETS_TOP_Y - PRESET_ROW_HEIGHT * 2 - AFTER_PRESETS_GAP)
 	popup.noteLabel:SetText("Note")
@@ -390,6 +389,11 @@ function ns.ShowQuickAdd(key, autoClose)
 		createPopup()
 	end
 
+	if popup:IsShown() and key ~= currentKey then
+		popup.noteBox:SetText("")
+		popup.repBox:SetText("")
+		popup.featuredCheck:SetChecked(false)
+	end
 	currentKey = key
 	autoCloseOnSubmit = autoClose and true or false
 	if not ns.GetPlayerRecord(key, false) then
@@ -513,6 +517,23 @@ function ns.QuickNoteIdentity(identity)
 	ns.ShowQuickAdd(identity.key, true)
 end
 
+-- dispatches a resolved identity to whichever action a tap-target-action/tap-hover-action
+-- setting picked. shared by ns.QuickNoteTarget below and the radial menu's tap handler.
+function ns.PerformTapAction(action, identity)
+	if not identity then
+		return
+	end
+	if action == "history" then
+		ns.TouchIdentity(identity.key, identity)
+		ns.SelectHistoryTab(identity.key)
+	elseif action == "details" then
+		ns.TouchIdentity(identity.key, identity)
+		ns.ShowPlayerDetails(identity.key)
+	else
+		ns.QuickNoteIdentity(identity)
+	end
+end
+
 -- quick-add for current target. macro/keybind entry point, see Bindings.xml and
 -- /wrnote in Slash.lua
 function ns.QuickNoteTarget()
@@ -528,11 +549,12 @@ function ns.QuickNoteTarget()
 		end
 	end
 
-	local unit
-	if UnitExists("target") and UnitIsPlayer("target") then
+	local unit, isHover
+	if ns.GetSettings().tapTargetEnabled ~= false and UnitExists("target") and UnitIsPlayer("target") then
 		unit = "target"
 	elseif ns.GetSettings().quickNoteHoverEnabled and UnitExists("mouseover") and UnitIsPlayer("mouseover") then
 		unit = "mouseover"
+		isHover = true
 	end
 
 	if not unit then
@@ -557,5 +579,6 @@ function ns.QuickNoteTarget()
 		end
 		return
 	end
-	ns.QuickNoteIdentity(ns.IdentifyUnit(unit))
+	local action = isHover and ns.GetSettings().tapHoverAction or ns.GetSettings().tapTargetAction
+	ns.PerformTapAction(action, ns.IdentifyUnit(unit))
 end

@@ -1,6 +1,31 @@
 local ns = WorthRemembering
 
 local MIN_WIDTH, MIN_HEIGHT = 960, 480
+-- first-open size, before the user has resized it: always exactly 16:9 (handy for
+-- recording and cropping to the window), about 70% of the available width (or less if
+-- that would be too tall), kept between 960x540 and 1440x810. the available area already
+-- accounts for the player's UI scale
+local DEFAULT_SCREEN_SHARE = 0.7
+local DEFAULT_MIN_WIDTH, DEFAULT_MAX_WIDTH = 960, 1440
+local ASPECT = 9 / 16
+
+local function defaultWindowSize()
+	local scale = ns.GetSettings().uiScale or 1
+	local availWidth = UIParent:GetWidth() / scale
+	local availHeight = UIParent:GetHeight() / scale
+	local width = availWidth * DEFAULT_SCREEN_SHARE
+	if width * ASPECT > availHeight * DEFAULT_SCREEN_SHARE then
+		width = availHeight * DEFAULT_SCREEN_SHARE / ASPECT
+	end
+	width = math.max(DEFAULT_MIN_WIDTH, math.min(DEFAULT_MAX_WIDTH, width))
+	local height = width * ASPECT
+	-- a screen too small for even the minimum keeps the ratio by shrinking to fit
+	if height > availHeight then
+		height = availHeight
+		width = height / ASPECT
+	end
+	return math.floor(width + 0.5), math.floor(height + 0.5)
+end
 -- size the window collapses to via the minimize button
 local MINIMIZED_WIDTH, MINIMIZED_HEIGHT = 280, 56
 local CONTENT_TOP = 68
@@ -99,6 +124,9 @@ local characterFilter = ns.CreateFilterSet()
 local lastSeenFilter = ns.CreateFilterSet()
 local classFilter = ns.CreateFilterSet()
 local raceFilter = ns.CreateFilterSet()
+local sexFilter = ns.CreateFilterSet()
+-- filled once settings exist, then kept current by refreshSexFilterDropdown
+local sexFilterOptions = {}
 local factionFilter = ns.CreateFilterSet()
 local bracketFilter = ns.CreateFilterSet()
 local notesFilter = ns.CreateFilterSet()
@@ -167,6 +195,17 @@ local function getBracketOptions()
 		options[#options + 1] = { value = bracketKey, text = (ns.GetBracketDisplay(bracketKey)) }
 	end
 	return options
+end
+
+-- the bracket filter's menu reads this same table every time it opens, so refilling it
+-- in place keeps renamed brackets current without rebuilding the dropdown
+local bracketFilterOptions = {}
+
+local function refreshBracketFilterOptions()
+	local fresh = getBracketOptions()
+	for i, option in ipairs(fresh) do
+		bracketFilterOptions[i] = option
+	end
 end
 
 -- display only, sort uses the raw timestamp (see sortValue below)
@@ -376,7 +415,10 @@ local function matchesFilters(record, key)
 	if not classFilter:Matches(record.classFile) then
 		return false
 	end
-	if not raceFilter:Matches(ns.SimplifyRace(record.race)) then
+	if not raceFilter:Matches(ns.RaceDisplay(record)) then
+		return false
+	end
+	if not sexFilter:Matches(ns.SexFilterKey(record.sex)) then
 		return false
 	end
 	if not factionFilter:Matches(record.faction) then
@@ -399,6 +441,7 @@ local function hasActiveFilters()
 		or characterFilter.count > 0
 		or classFilter.count > 0
 		or raceFilter.count > 0
+		or sexFilter.count > 0
 		or factionFilter.count > 0
 		or bracketFilter.count > 0
 		or lastSeenFilter.count > 0
@@ -411,8 +454,30 @@ local function syncClassRaceDropdowns()
 		return
 	end
 	classRaceBar.dropdowns[1]:SetText(classFilter:SummaryText(getClassOptions(), "All classes"))
-	classRaceBar.dropdowns[2]:SetText(raceFilter:SummaryText(getRaceOptions(), "All races"))
-	classRaceBar.dropdowns[3]:SetText(factionFilter:SummaryText(FACTION_OPTIONS, "All factions"))
+	classRaceBar.dropdowns[2]:SetText(sexFilter:SummaryText(ns.FillSexFilterOptions(sexFilterOptions), ns.SexFilterAllText()))
+	classRaceBar.dropdowns[3]:SetText(raceFilter:SummaryText(getRaceOptions(), "All races"))
+	classRaceBar.dropdowns[4]:SetText(factionFilter:SummaryText(FACTION_OPTIONS, "All factions"))
+end
+
+-- just the body type dropdown, cheap enough to run on every refresh so its options and
+-- text follow the display/label settings
+local function refreshSexFilterDropdown()
+	ns.FillSexFilterOptions(sexFilterOptions)
+	if classRaceBar then
+		classRaceBar.dropdowns[2]:SetText(sexFilter:SummaryText(sexFilterOptions, ns.SexFilterAllText()))
+	end
+end
+
+-- click a body type cell to filter to just that value; click it again to clear
+local function onSexCellClick(item)
+	local value = ns.SexFilterKey(item.record.sex)
+	if sexFilter.count == 1 and sexFilter.selected[value] then
+		sexFilter:Clear()
+	else
+		sexFilter:Set(value)
+	end
+	syncClassRaceDropdowns()
+	ns.RefreshOverview()
 end
 
 -- clears every Players-tab filter and syncs filter widgets back to "all". shared by
@@ -427,6 +492,7 @@ local function resetAllPlayerFilters()
 	lastSeenInvert = false
 	classFilter:Clear()
 	raceFilter:Clear()
+	sexFilter:Clear()
 	factionFilter:Clear()
 	bracketFilter:Clear()
 
@@ -478,7 +544,7 @@ local function onClassCellClick(item)
 end
 
 local function onRaceCellClick(item)
-	local value = ns.SimplifyRace(item.record.race)
+	local value = ns.RaceDisplay(item.record)
 	if not value then
 		return
 	end
@@ -519,23 +585,25 @@ local COLUMNS = {
 	{ key = "select", label = "", width = 26, min = 26, cellType = "checkbox", noSort = true,
 		isVisible = function() return ns.GetSettings().multiSelectEnabled end,
 		onCheckboxClick = function(item, checked) setKeySelected(item.key, checked) end },
-	{ key = "name", label = "Name", width = 140, min = 100, onCellClick = function(item) ns.ShowPlayerDetails(item.key) end },
-	{ key = "race", label = "Race", width = 90, min = 70, onCellClick = onRaceCellClick },
-	{ key = "class", label = "Class", width = 90, min = 70, onCellClick = onClassCellClick },
-	{ key = "faction", label = "Faction", width = 80, min = 60, onCellClick = onFactionCellClick },
+	{ key = "name", label = "Name", width = 130, min = 100, onCellClick = function(item) ns.ShowPlayerDetails(item.key) end },
+	-- current (most recently seen) sex, from the record
+	{ key = "sex", label = ns.SexLabel, width = 74, min = 50, onCellClick = onSexCellClick },
+	{ key = "race", label = "Race", width = 70, min = 70, onCellClick = onRaceCellClick },
+	{ key = "class", label = "Class", width = 70, min = 70, onCellClick = onClassCellClick },
+	{ key = "faction", label = "Faction", width = 60, min = 60, onCellClick = onFactionCellClick },
 	-- min depends on whether the +/- buttons are hidden (Options > General > Window):
 	-- shown, the column needs enough room they don't float over the Bracket column
 	-- next to it; hidden, there's nothing riding on it that needs the extra room
-	{ key = "standing", label = "Standing", width = 130,
+	{ key = "standing", label = "Standing", width = 100,
 		min = function() return ns.GetSettings().hidePlayersStandingButtons and 50 or 100 end },
-	{ key = "bracket", label = "Bracket", width = 110, min = 80, onCellClick = onBracketCellClick },
-	{ key = "entries", label = "Entries", width = 90, min = 50 },
+	{ key = "bracket", label = "Bracket", width = 80, min = 80, onCellClick = onBracketCellClick },
+	{ key = "entries", label = "Entries", width = 54, min = 50 },
 	-- min depends on whether the New button is hidden (Options > General > Window): see
 	-- the Standing column's own identical reasoning above
-	{ key = "notes", label = "Notes", width = 110,
+	{ key = "notes", label = "Notes", width = 90,
 		min = function() return ns.GetSettings().hidePlayersNewButton and 40 or 90 end },
-	{ key = "seenCount", label = "Times Seen", width = 100, min = 60 },
-	{ key = "lastSeen", label = "Last Seen", width = 130, min = 100 },
+	{ key = "seenCount", label = "Times Seen", width = 77, min = 60 },
+	{ key = "lastSeen", label = "Last Seen", width = 100, min = 100 },
 	{ key = "lastLocation", label = "Last Location", width = 120, min = 70 },
 	{ key = "lastNote", label = "Last Note", width = 0 }, -- flex, always last
 }
@@ -576,8 +644,10 @@ local function sortValue(item, key)
 		return item.record.standing or 0
 	elseif key == "class" then
 		return ns.ClassDisplayName(item.record.classFile)
+	elseif key == "sex" then
+		return ns.SexDisplay(item.record.sex) or ""
 	elseif key == "race" then
-		return ns.SimplifyRace(item.record.race) or ""
+		return ns.RaceDisplay(item.record) or ""
 	elseif key == "faction" then
 		return item.record.faction or ""
 	elseif key == "entries" then
@@ -614,7 +684,8 @@ local function render(row, item)
 
 	row.cells.class:SetText(ns.ClassDisplayName(record.classFile))
 	row.cells.class:SetTextColor(cr, cg, cb)
-	row.cells.race:SetText(ns.SimplifyRace(record.race) or "-")
+	row.cells.sex:SetText(ns.SexDisplay(record.sex) or "-")
+	row.cells.race:SetText(ns.RaceDisplay(record) or "-")
 
 	local fr, fg, fb = ns.FactionColor(record.faction)
 	row.cells.faction:SetText(record.faction or "-")
@@ -765,11 +836,13 @@ function ns.EnforcePlayersColumnMinWidth(key, minWidth)
 end
 
 function ns.RefreshOverview()
+	refreshBracketFilterOptions()
+	refreshSexFilterDropdown()
 	if not (mainFrame and mainFrame:IsShown() and mainFrame.selectedTab == 1) then
 		return
 	end
 	playersTable.Refresh()
-	local shown = #getItems()
+	local shown = playersTable.GetItemCount()
 	-- counts distinct players (one row each), a different unit than the footer's
 	-- "total entries" (every logged entry across everyone).
 	local shownText = shown == 1 and "1 player" or (shown .. " players")
@@ -862,6 +935,7 @@ local function createPlayersContent()
 	content:SetPoint("BOTTOMRIGHT", 0, 44)
 	mainFrame.playersContent = content
 
+	refreshBracketFilterOptions()
 	filterBar = ns.CreateFilterBar(content, {
 		search = { onChange = function(text) search = text; ns.RefreshOverview() end },
 		dropdowns = {
@@ -877,7 +951,7 @@ local function createPlayersContent()
 			},
 			{
 				multi = true,
-				options = getBracketOptions(),
+				options = bracketFilterOptions,
 				isSelected = function(value) return bracketFilter.selected[value] == true end,
 				toggle = function(value) bracketFilter:Toggle(value); ns.RefreshOverview() end,
 				getSummaryText = function() return bracketFilter:SummaryText(getBracketOptions(), "All brackets") end,
@@ -980,6 +1054,16 @@ local function createPlayersContent()
 			},
 			{
 				multi = true,
+				options = sexFilterOptions,
+				isSelected = function(value) return sexFilter.selected[value] == true end,
+				toggle = function(value) sexFilter:Toggle(value); syncClassRaceDropdowns(); ns.RefreshOverview() end,
+				getSummaryText = function() return sexFilter:SummaryText(ns.FillSexFilterOptions(sexFilterOptions), ns.SexFilterAllText()) end,
+				clearText = ns.SexFilterAllText,
+				onClear = function() sexFilter:Clear(); syncClassRaceDropdowns(); ns.RefreshOverview() end,
+				width = 140,
+			},
+			{
+				multi = true,
 				options = getRaceOptions(),
 				isSelected = function(value) return raceFilter.selected[value] == true end,
 				toggle = function(value) raceFilter:Toggle(value); syncClassRaceDropdowns(); ns.RefreshOverview() end,
@@ -1055,7 +1139,7 @@ local function createPlayersContent()
 		local opts = {}
 		for _, col in ipairs(COLUMNS) do
 			if playersTable.IsColumnHideable(col.key) then
-				opts[#opts + 1] = { value = col.key, text = col.label }
+				opts[#opts + 1] = { value = col.key, text = ns.ColumnLabel(col) }
 			end
 		end
 		return opts
@@ -1191,8 +1275,9 @@ local function createMainFrame()
 	local settings = ns.GetSettings()
 	-- clamp to both bounds, not just the minimum, so a size saved before a later
 	-- version raised MIN_WIDTH/HEIGHT or from a bad resize doesn't persist out of range.
-	local savedWidth = math.max(settings.windowWidth or MIN_WIDTH, MIN_WIDTH)
-	local savedHeight = math.max(settings.windowHeight or MIN_HEIGHT, MIN_HEIGHT)
+	local defaultWidth, defaultHeight = defaultWindowSize()
+	local savedWidth = math.max(settings.windowWidth or defaultWidth, MIN_WIDTH)
+	local savedHeight = math.max(settings.windowHeight or defaultHeight, MIN_HEIGHT)
 	mainFrame:SetSize(math.min(savedWidth, UIParent:GetWidth()), math.min(savedHeight, UIParent:GetHeight()))
 	if settings.windowPoint then
 		mainFrame:SetPoint(settings.windowPoint, UIParent, settings.windowRelativePoint or settings.windowPoint, settings.windowX, settings.windowY)
@@ -1299,7 +1384,10 @@ local function createMainFrame()
 	-- dark text, not the usual light GameFontDisableSmall gray, since it sits on the
 	-- light gold footer band, gray-on-gold read as low contrast.
 	mainFrame.footer = mainFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-	mainFrame.footer:SetPoint("BOTTOMLEFT", 20, 18)
+	-- centered in the band, since the larger text no longer fits a fixed bottom offset
+	mainFrame.footer:SetPoint("LEFT", footerBand, "LEFT", 6, 0)
+	local footerFont, _, footerFlags = mainFrame.footer:GetFont()
+	mainFrame.footer:SetFont(footerFont, 12, footerFlags)
 	mainFrame.footer:SetTextColor(0.06, 0.04, 0.02, 1)
 	-- GameFontNormalSmall's baked-in dark shadow is meant for light text on a dark
 	-- background; with dark text on this band it just reads as smudged. Clear it.
@@ -1357,6 +1445,15 @@ local function createMainFrame()
 	local expandedWidth, expandedHeight
 
 	local function setMinimized(min)
+		-- pinned by its top-right corner, so it collapses up into that corner and
+		-- expands back out to the same spot, instead of shrinking toward its center
+		local right, top = mainFrame:GetRight(), mainFrame:GetTop()
+		if right and top then
+			mainFrame:ClearAllPoints()
+			mainFrame:SetPoint("TOPRIGHT", UIParent, "BOTTOMLEFT", right, top)
+			savePosition()
+		end
+
 		minimized = min
 		mainFrame.isMinimized = min
 		mainFrame:SetResizable(not min)
@@ -1406,6 +1503,13 @@ end
 -- call, not just while that tab is visible.
 function ns.GetSelectedTab()
 	return mainFrame and mainFrame.selectedTab
+end
+
+-- true only while that tab is actually on screen. hidden tabs skip refreshing, since
+-- switching to a tab (or reopening/restoring the window) refreshes it anyway
+function ns.IsTabVisible(index)
+	return mainFrame ~= nil and mainFrame:IsShown() and not mainFrame.isMinimized
+		and mainFrame.selectedTab == index
 end
 
 function ns.ToggleOverview()
@@ -1467,6 +1571,15 @@ function ns.SelectOptionsTab()
 	restoreIfMinimized()
 	if mainFrame.selectedTab ~= 5 then
 		setTab(5)
+	end
+end
+
+function ns.SelectAboutTab()
+	ns.EnsureMainFrame()
+	ns.ShowOverview()
+	restoreIfMinimized()
+	if mainFrame.selectedTab ~= 6 then
+		setTab(6)
 	end
 end
 
@@ -1532,7 +1645,10 @@ end
 
 -- refreshes every tab's display after any data change (add/edit/delete an entry or a
 -- whole player record).
-function ns.RefreshAllTabs()
+local refreshAllPending = false
+
+local function refreshAllNow()
+	refreshAllPending = false
 	ns.RefreshOverview()
 	if ns.RefreshHistory then
 		ns.RefreshHistory()
@@ -1549,4 +1665,14 @@ function ns.RefreshAllTabs()
 	if ns.RefreshNameplateIcons then
 		ns.RefreshNameplateIcons()
 	end
+end
+
+-- many callers can fire in the same frame (a whole party logged at once, a crowd of new
+-- nearby players), so they're coalesced into one refresh on the next frame
+function ns.RefreshAllTabs()
+	if refreshAllPending then
+		return
+	end
+	refreshAllPending = true
+	C_Timer.After(0, refreshAllNow)
 end

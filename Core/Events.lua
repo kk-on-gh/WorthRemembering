@@ -34,5 +34,23 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
 		if not ok then
 			ns.Print("Minimap button failed to load: " .. tostring(err))
 		end
+
+		-- recorded even when the option is off, so turning it back on only affects
+		-- future versions
+		local version = ns.GetAddonVersion()
+		local lastSeen = ns.GetLastSeenVersion()
+		if version and version ~= lastSeen then
+			-- nil on a fresh install, so the About tab only expands what's actually new
+			ns.UpdatedFromVersion = lastSeen
+			ns.SetLastSeenVersion(version)
+			if ns.GetSettings().showPatchNotesOnUpdate then
+				C_Timer.After(1, function()
+					local shown, showErr = pcall(ns.SelectAboutTab)
+					if not shown then
+						ns.Print("Patch notes failed to open: " .. tostring(showErr))
+					end
+				end)
+			end
+		end
 	end
 end)

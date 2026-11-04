@@ -55,6 +55,10 @@ local function cmdTestSurvey(msg)
 		ns.Print("dungeon survey window isn't loaded.")
 		return
 	end
+	if not ns.GetSettings().dungeonTracking.survey.enabled then
+		ns.Print("Surveys are disabled. Enable them in Options -> Survey before testing.")
+		return
+	end
 
 	local count = math.max(1, math.min(40, tonumber(msg) or 4))
 
@@ -76,6 +80,7 @@ local function cmdTestSurvey(msg)
 					realmOrSurname = record.realmOrSurname,
 					classFile = record.classFile,
 					race = record.race,
+					raceID = record.raceID,
 					faction = record.faction,
 				},
 				context = { yourLevel = UnitLevel("player"), zone = "Test Dungeon" },

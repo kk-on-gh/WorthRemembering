@@ -4,17 +4,11 @@ if not (TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall) then
 	return
 end
 
-local function standingColor(standing, band)
-	if math.abs(standing) <= band then
-		return 0.8, 0.8, 0.8
-	elseif standing > 0 then
-		return 0.2, 0.9, 0.2
-	end
-	return 0.9, 0.2, 0.2
-end
-
 TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip)
 	if tooltip ~= GameTooltip and tooltip ~= ItemRefTooltip then
+		return
+	end
+	if not ns.GetSettings().tooltipEnabled then
 		return
 	end
 
@@ -39,17 +33,43 @@ TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tool
 		return
 	end
 
-	local band = ns.GetSettings().neutralBand
-	local r, g, b = standingColor(record.standing or 0, band)
-
+	local content = ns.GetSettings().tooltipContent
 	local standing = record.standing or 0
-	local sign = standing > 0 and "+" or ""
+	local lines = {}
 
+	if content.rating then
+		local sign = standing > 0 and "+" or ""
+		lines[#lines + 1] = { "WR Rep: " .. sign .. standing .. "  (" .. #record.entries .. " entries)", unpack(ns.GetBracket(standing).color) }
+	end
+	if content.bracket then
+		local bracket = ns.GetBracket(standing)
+		lines[#lines + 1] = { bracket.name, unpack(bracket.color) }
+	end
+	if content.lastNote then
+		local lastEntry = record.entries[#record.entries]
+		if lastEntry and lastEntry.text and lastEntry.text ~= "" then
+			lines[#lines + 1] = { lastEntry.text, 0.8, 0.8, 0.8 }
+		end
+	end
+	if content.timesSeen then
+		local seenCount = record.seenCount or 0
+		lines[#lines + 1] = { "Seen " .. seenCount .. (seenCount == 1 and " time" or " times"), 0.8, 0.8, 0.8 }
+	end
+	if content.noteCount then
+		local noteCount = 0
+		for _, entry in ipairs(record.entries) do
+			if entry.text and entry.text ~= "" then
+				noteCount = noteCount + 1
+			end
+		end
+		lines[#lines + 1] = { noteCount .. (noteCount == 1 and " note" or " notes"), 0.8, 0.8, 0.8 }
+	end
+
+	if #lines == 0 then
+		return
+	end
 	tooltip:AddLine(" ")
-	tooltip:AddLine("WR Rep: " .. sign .. standing .. "  (" .. #record.entries .. " entries)", r, g, b, true)
-
-	local lastEntry = record.entries[#record.entries]
-	if lastEntry and lastEntry.text and lastEntry.text ~= "" then
-		tooltip:AddLine(lastEntry.text, 0.8, 0.8, 0.8, true)
+	for _, line in ipairs(lines) do
+		tooltip:AddLine(line[1], line[2], line[3], line[4], true)
 	end
 end)

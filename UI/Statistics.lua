@@ -101,7 +101,7 @@ local function computeStats()
 					classNegCount[record.classFile] = (classNegCount[record.classFile] or 0) + 1
 				end
 			end
-			local race = ns.SimplifyRace(record.race)
+			local race = ns.RaceDisplay(record)
 			if race then
 				raceStanding[race] = (raceStanding[race] or 0) + standing
 				raceCount[race] = (raceCount[race] or 0) + 1
@@ -216,8 +216,8 @@ local ACTIVITY_TILES = {
 	{ label = "Entries This Year", getValue = function(s) return s.entriesYear end },
 }
 local REP_TILES = {
-	{ label = "Total Positive Standing Given", getValue = function(s) return "+" .. s.totalPositive end, color = { 0.2, 0.9, 0.2 } },
-	{ label = "Total Negative Standing Given", getValue = function(s) return "-" .. s.totalNegative end, color = { 0.9, 0.2, 0.2 } },
+	{ label = "Total Positive Standing Given", getValue = function(s) return "+" .. s.totalPositive end, color = function() return ns.StandingColor(1, 0) end },
+	{ label = "Total Negative Standing Given", getValue = function(s) return "-" .. s.totalNegative end, color = function() return ns.StandingColor(-1, 0) end },
 	{
 		label = "Net Standing",
 		getValue = function(s) return s.totalPositive - s.totalNegative end,
@@ -304,10 +304,7 @@ local function bracketSlotLabel(slot)
 end
 
 local function bracketSlotColor(slot)
-	if slot.sign == "zero" then
-		return 0.8, 0.8, 0.8
-	end
-	local c = ns.GetSettings().repBracketColors[slot.sign][slot.index]
+	local c = ns.GetBracketColor(slot.sign, slot.index)
 	return c[1], c[2], c[3]
 end
 
@@ -459,7 +456,8 @@ local function applyTileValues(tileDefs, stats)
 end
 
 local function refresh()
-	if not panel then
+	-- walks every player and entry, so it only runs while Statistics is on screen
+	if not panel or not ns.IsTabVisible(4) then
 		return
 	end
 	local stats = computeStats()
@@ -480,6 +478,8 @@ function ns.BuildStatisticsPanel(parent)
 	panel = parent
 
 	local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+
+	ns.SetGentleScroll(scroll)
 	scroll:SetPoint("TOPLEFT", 0, 0)
 	scroll:SetPoint("BOTTOMRIGHT", -34, 0)
 

@@ -57,7 +57,7 @@ local function migrate(savedDb)
 	end
 
 	if from < 4 then
-		-- v4: append the Healed/Rezed/Buffed Me quick-add presets, matched by label so
+		-- v4: append the Healed/Rezzed/Buffed Me quick-add presets, matched by label so
 		-- this never duplicates or restores a preset the user has since edited or removed.
 		local presets = savedDb.settings and savedDb.settings.quickPresets
 		if presets and presets.items then
@@ -66,7 +66,7 @@ local function migrate(savedDb)
 				haveLabel[item.label] = true
 			end
 			for _, newItem in ipairs(ns.Defaults.settings.quickPresets.items) do
-				if (newItem.label == "Healed Me" or newItem.label == "Rezed Me" or newItem.label == "Buffed Me")
+				if (newItem.label == "Healed Me" or newItem.label == "Rezzed Me" or newItem.label == "Buffed Me")
 					and not haveLabel[newItem.label] then
 					presets.items[#presets.items + 1] = deepCopy(newItem)
 				end
@@ -124,10 +124,19 @@ function ns.GetSettings()
 	return db.settings
 end
 
+-- stored outside settings, but cleared by Reset All Options too (see ns.ResetAllSettings)
+function ns.GetLastSeenVersion()
+	return db.lastSeenVersion
+end
+
+function ns.SetLastSeenVersion(version)
+	db.lastSeenVersion = version
+end
+
 function ns.GetPlayerRecord(key, create)
 	local record = db.players[key]
 	if not record and create then
-		record = { entries = {}, standing = 0 }
+		record = { entries = {}, standing = 0, createdAt = time() }
 		db.players[key] = record
 	end
 	return record
@@ -150,7 +159,10 @@ function ns.TouchIdentity(key, identity)
 	record.guid = identity and identity.guid or record.guid
 	record.classFile = identity and identity.classFile or record.classFile
 	record.race = identity and identity.race or record.race
+	record.raceID = identity and identity.raceID or record.raceID
 	record.faction = identity and identity.faction or record.faction
+	record.sex = identity and identity.sex or record.sex
+	record.sexRaw = identity and identity.sexRaw or record.sexRaw
 	return record
 end
 
@@ -189,6 +201,25 @@ function ns.IncrementSeenCount(key)
 	record.lastSeenCountAt = now
 end
 
+-- inside ns.RunEntryBatch, the new-entry sound is held back and played once at the end
+local batchDepth, batchWantsSound = 0, false
+
+-- runs fn, which may add any number of entries, playing the new-entry sound at most
+-- once afterward (e.g. one survey save or one party-wide auto-log, not one per player)
+function ns.RunEntryBatch(fn)
+	batchDepth = batchDepth + 1
+	local ok, err = pcall(fn)
+	batchDepth = batchDepth - 1
+	if batchDepth == 0 and batchWantsSound then
+		batchWantsSound = false
+		local settings = ns.GetSettings()
+		ns.PlayConfiguredSound(settings.newEntrySound, settings.soundChannel)
+	end
+	if not ok then
+		error(err, 0)
+	end
+end
+
 -- appends a timestamped entry. fields: text, delta, source, yourLevel, theirLevel, zone,
 -- all optional. never mutates prior entries. loggedBy is always auto-stamped since the
 -- DB is shared across characters, History filters on it
@@ -196,6 +227,10 @@ function ns.AddEntry(key, identity, entry)
 	local record = ns.TouchIdentity(key, identity)
 
 	entry.time = entry.time or time()
+	-- their sex at the time of this entry (History shows this, Players shows the
+	-- record's current one), from the live unit when there was one
+	entry.theirSex = entry.theirSex or (identity and identity.sex) or record.sex
+	entry.theirSexRaw = entry.theirSexRaw or (identity and identity.sexRaw) or record.sexRaw
 	entry.loggedBy = entry.loggedBy or ns.GetMyFullName()
 	-- A featured entry with no note text would show as a blank quote on the Details
 	-- tab, so the flag can't survive without one.
@@ -215,11 +250,17 @@ function ns.AddEntry(key, identity, entry)
 		ns.Print("Entry created for " .. ns.DisplayName(record, key))
 	end
 
-	-- auto-nearby entries can fire once per stranger in a crowd, excluded here so they
-	-- don't spam the new-entry sound
-	local soundSettings = ns.GetSettings().newEntrySound
-	if soundSettings.enabled and entry.source ~= "auto-nearby" then
-		ns.PlayConfiguredSound(soundSettings, ns.GetSettings().soundChannel)
+	-- auto-nearby entries can fire once per stranger in a crowd, so they never play the
+	-- new-entry sound. group-wide logging goes through ns.RunEntryBatch instead
+	local settings = ns.GetSettings()
+	local soundSettings = settings.newEntrySound
+	local muted = entry.source == "auto-nearby"
+	if soundSettings.enabled and not muted then
+		if batchDepth > 0 then
+			batchWantsSound = true
+		else
+			ns.PlayConfiguredSound(soundSettings, settings.soundChannel)
+		end
 	end
 
 	if entry.delta and entry.delta ~= 0 then
@@ -283,6 +324,39 @@ function ns.ClearDatabase()
 	wipe(db.players)
 end
 
+-- every window's position/size/visibility, scale/opacity, table layouts, and the
+-- Nearby window's layout. keys with no default (saved positions/sizes) reset to nil,
+-- which each window treats as "never moved/resized"
+local UI_SETTING_KEYS = {
+	"windowPoint", "windowRelativePoint", "windowX", "windowY", "windowWidth", "windowHeight",
+	"windowAlpha", "uiScale", "columnWidths", "columnVisibility", "columnOrder", "windowPositions",
+	"hidePlayersStandingButtons", "hidePlayersNewButton", "multiSelectEnabled",
+	"nearbyWindowEnabled", "nearbyPoint", "nearbyScale", "nearbyIdleAlpha", "nearbyHoverAlpha",
+	"nearbyGrowDirection", "nearbyVisibleRowLimit",
+	"nearbyStaticSize", "nearbyStaticWidth", "nearbyStaticHeight",
+	"minimapIcon",
+}
+
+-- callers reload the UI afterwards so every open window picks up the reset values
+function ns.ResetUISettings()
+	local settings, defaults = db.settings, ns.Defaults.settings
+	for _, key in ipairs(UI_SETTING_KEYS) do
+		settings[key] = deepCopy(defaults[key])
+	end
+	local icon, iconDefaults = settings.nameplateIcon, defaults.nameplateIcon
+	icon.size, icon.offsetX, icon.offsetY = iconDefaults.size, iconDefaults.offsetX, iconDefaults.offsetY
+	local survey = settings.dungeonTracking.survey
+	survey.windowWidth, survey.windowHeight = nil, nil
+end
+
+-- every setting back to defaults, including the last-seen version (so the next load
+-- acts like a fresh install). player records are untouched
+function ns.ResetAllSettings()
+	wipe(db.settings)
+	applyDefaults(db.settings, ns.Defaults.settings)
+	db.lastSeenVersion = nil
+end
+
 -- true if standing is exactly 0 and no entry has a note. stricter than ns.IsNotable,
 -- which would spare a +5/-5 record that nets to 0
 local function isZeroAndNoteless(record)
@@ -336,7 +410,7 @@ local function lastSeenTime(record)
 		return record.lastSeen
 	end
 	local lastEntry = record.entries[#record.entries]
-	return lastEntry and lastEntry.time or nil
+	return lastEntry and lastEntry.time or record.createdAt
 end
 
 -- must satisfy every checked criterion, not just one
@@ -351,8 +425,9 @@ local function matchesPruneCriteria(record, criteria, notSeenDaysValue)
 		return false
 	end
 	if criteria.notSeenDays then
+		-- no date at all means unknown, not stale
 		local seen = lastSeenTime(record)
-		if seen and (time() - seen) < notSeenDaysValue * 86400 then
+		if not seen or (time() - seen) < notSeenDaysValue * 86400 then
 			return false
 		end
 	end
@@ -425,7 +500,16 @@ function ns.GetKnownClasses()
 end
 
 function ns.GetKnownRaces()
-	return knownFieldValues("race", ns.SimplifyRace)
+	local seen, list = {}, {}
+	for _, key in ipairs(ns.GetAllPlayerKeys()) do
+		local record = ns.GetPlayerRecord(key, false)
+		local race = record and ns.RaceDisplay(record)
+		if race and not seen[race] then
+			seen[race] = true
+			list[#list + 1] = race
+		end
+	end
+	return list
 end
 
 function ns.GetKnownFactions()

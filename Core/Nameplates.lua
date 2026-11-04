@@ -130,10 +130,23 @@ function ns.RefreshNameplateIcons()
 	end
 end
 
-local function refresh()
+-- nameplates arrive in bursts (zoning into a city), so one Nearby-window refresh per
+-- frame instead of one per plate
+local refreshPending = false
+
+local function refreshNow()
+	refreshPending = false
 	if ns.RefreshNearbyWindow then
 		ns.RefreshNearbyWindow()
 	end
+end
+
+local function refresh()
+	if refreshPending then
+		return
+	end
+	refreshPending = true
+	C_Timer.After(0, refreshNow)
 end
 
 local function updateUnit(unit)
@@ -160,7 +173,7 @@ local function updateUnit(unit)
 	-- existing record first
 	if identity then
 		local autoAdd = ns.GetSettings().autoAddNearby
-		if autoAdd.enabled and (autoAdd.alsoWhileResting or not IsResting()) then
+		if ns.GetSettings().autoTrack.enabled and autoAdd.enabled and (autoAdd.alsoWhileResting or not IsResting()) then
 			if not ns.GetPlayerRecord(identity.key, false) then
 				local entry = ns.CaptureContext(unit)
 				entry.source = "auto-nearby"

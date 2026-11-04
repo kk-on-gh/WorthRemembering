@@ -60,13 +60,8 @@ local function render(row, item)
 	row.cells.time:SetText(ns.FormatTime(entry.time))
 	row.cells.character:SetText(entry.loggedBy or "-")
 
-	if ns.IsAutoSource(entry.source) then
-		row.cells.source:SetText("Auto")
-		row.cells.source:SetTextColor(0.55, 0.75, 1)
-	else
-		row.cells.source:SetText("Manual")
-		row.cells.source:SetTextColor(0.8, 0.8, 0.8)
-	end
+	row.cells.source:SetText(ns.SourceLabel(entry.source))
+	row.cells.source:SetTextColor(ns.SourceColor(entry.source))
 
 	if entry.delta and entry.delta ~= 0 then
 		local r, g, b = ns.StandingColor(entry.delta, 0)
@@ -129,7 +124,7 @@ local function refresh()
 	panel.name:SetText(ns.DisplayName(record, detailsKey))
 	panel.name:SetTextColor(cr, cg, cb)
 
-	local race = ns.SimplifyRace(record.race) or "Unknown race"
+	local race = ns.RaceDisplay(record) or "Unknown race"
 	local class = ns.ClassDisplayName(record.classFile)
 	local faction = record.faction or "Unknown faction"
 	local classHex = ns.ToHex(cr, cg, cb)

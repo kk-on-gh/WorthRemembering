@@ -19,7 +19,7 @@ local DEADZONE = 23 -- px, UIParent-space
 
 -- a wheel with too many slices gets hard to aim, dual-mode selections are capped here.
 -- exported so the Options tab's dropdown can enforce the same limit
-ns.MAX_RADIAL_PRESETS = 5
+ns.MAX_RADIAL_PRESETS = 8
 local MAX_RADIAL_PRESETS = ns.MAX_RADIAL_PRESETS
 
 -- effective preset list for ring 1 or 2. an explicit stored selection (Options -> Radial
@@ -31,19 +31,32 @@ local MAX_RADIAL_PRESETS = ns.MAX_RADIAL_PRESETS
 -- ring 1, negative -> ring 2; zero/no-delta presets go to neither). capped to
 -- MAX_RADIAL_PRESETS either way, except the single-radial "everything" default, which
 -- has nothing to cap against until the user actually picks a subset.
+-- settings field holding a ring's saved selection for the current split mode
+function ns.RadialLabelsKey(ringIndex)
+	local suffix = ns.GetSettings().radialMenu.splitMode == "all" and "All" or ""
+	return "radial" .. ringIndex .. "Labels" .. suffix
+end
+
+-- whether a radial is limited to presets of one sign right now
+function ns.IsRadialSignSplit()
+	local radial = ns.GetSettings().radialMenu
+	return radial.secondEnabled and radial.splitMode ~= "all"
+end
+
 function ns.GetRadialPresetSet(ringIndex)
 	local settings = ns.GetSettings()
 	local radial = settings.radialMenu
-	local allItems = settings.quickPresets.enabled and settings.quickPresets.items or {}
+	-- the quick-add popup's own "show preset buttons" checkbox doesn't apply here
+	local allItems = settings.quickPresets.items or {}
 
-	local explicit = (ringIndex == 1) and radial.radial1Labels or radial.radial2Labels
+	local explicit = radial[ns.RadialLabelsKey(ringIndex)]
 	-- a stored selection can predate the second radial being enabled (single-radial mode
 	-- doesn't care about sign), or predate a preset's delta being edited since, so dual
 	-- mode re-checks sign here too instead of trusting it was saved correctly: without
 	-- this, a leftover wrong-sign label still counts toward the ring's list and shows up
 	-- on its wheel even though the (now sign-filtered) dropdown no longer offers it
 	local function signOk(delta)
-		if not radial.secondEnabled then return true end
+		if not ns.IsRadialSignSplit() then return true end
 		return (ringIndex == 1 and delta > 0) or (ringIndex == 2 and delta < 0)
 	end
 
@@ -63,6 +76,11 @@ function ns.GetRadialPresetSet(ringIndex)
 
 	if not radial.secondEnabled then
 		return ringIndex == 1 and allItems or {}
+	end
+
+	-- Everything mode has no sign to split by, so radial 2 starts empty until picked
+	if radial.splitMode == "all" and ringIndex == 2 then
+		return {}
 	end
 
 	local list = {}
@@ -111,7 +129,9 @@ local PRE_CLICK = ([[
 		-- resolved on the insecure side instead (each ring's own binding already
 		-- encodes its modifier), this only gates on whether there's anything to show.
 		local count = self:GetAttribute("wr-count") or 0
-		if count == 0 then
+		-- wr-showempty: an empty second radial still opens (with a hint) instead of
+		-- turning the hold into a tap, see OnOpen
+		if count == 0 and not self:GetAttribute("wr-showempty") then
 			RING_ACTIVE = nil
 			-- "immediate": fires right at keydown, before OnOpen (below) ever runs for
 			-- this press, so there's no captured identity from it to reuse yet -- see
@@ -294,6 +314,14 @@ local function ensureWheel()
 	wheel.nameText:SetPoint("BOTTOM", wheel, "TOP", 0, 6)
 	wheel.nameText:Hide()
 	wheel.nameBg:SetPoint("CENTER", wheel.nameText)
+
+	-- shown instead of slices when an enabled second radial has no presets picked yet
+	wheel.emptyText = wheel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	wheel.emptyText:SetPoint("CENTER", 0, -RADIUS)
+	wheel.emptyText:SetWidth(200)
+	wheel.emptyText:SetJustifyH("CENTER")
+	wheel.emptyText:SetText("No presets on this radial yet.\nPick some in Options > Radial Menu.")
+	wheel.emptyText:Hide()
 	return wheel
 end
 
@@ -547,8 +575,11 @@ end
 -- plain tap have their own independent hover settings (radialMenu.hoverEnabled vs
 -- quickNoteHoverEnabled), and this same function resolves identity for both, see
 -- openIdentity/tapIdentity below.
-local function resolveActiveUnit(hoverEnabled)
-	if UnitExists("target") and UnitIsPlayer("target") then
+-- targetEnabled defaults to true (the wheel's own open/pick resolution always checks
+-- target first); only the plain-tap path gates it via tapTargetEnabled, same idea as
+-- hoverEnabled already does for quickNoteHoverEnabled vs radialMenu.hoverEnabled.
+local function resolveActiveUnit(hoverEnabled, targetEnabled)
+	if targetEnabled ~= false and UnitExists("target") and UnitIsPlayer("target") then
 		return "target"
 	end
 	if hoverEnabled and UnitExists("mouseover") and UnitIsPlayer("mouseover") then
@@ -574,7 +605,7 @@ end
 -- anything for taps once the radial was enabled, since every tap routed through the
 -- radial-gated identity instead of its own setting.
 local openIdentity, openContext
-local tapIdentity, tapContext
+local tapIdentity, tapContext, tapIsHover
 
 local function updateActiveUnitDisplay()
 	if not openIdentity then
@@ -586,7 +617,15 @@ local function updateActiveUnitDisplay()
 	end
 	if not wheel then return end
 	if openIdentity then
-		local r, g, b = ns.ClassColor(openIdentity.classFile)
+		local r, g, b
+		if ns.GetSettings().radialMenu.nameColor == "bracket" then
+			-- no record yet reads as neutral
+			local record = ns.GetPlayerRecord(openIdentity.key, false)
+			local standing = (record and record.standing or 0) + ns.GetPendingAdjustment(openIdentity.key)
+			r, g, b = unpack(ns.GetBracket(standing).color)
+		else
+			r, g, b = ns.ClassColor(openIdentity.classFile)
+		end
 		wheel.nameText:SetText(openIdentity.name)
 		wheel.nameText:SetTextColor(r, g, b)
 		wheel.nameText:Show()
@@ -711,7 +750,7 @@ function Controller:OnOpen(ring)
 	local ringButton = RingButtons[ring]
 	escCancelled = false
 	openIdentity, openContext = nil, nil
-	tapIdentity, tapContext = nil, nil
+	tapIdentity, tapContext, tapIsHover = nil, nil, nil
 
 	-- both captured unconditionally, before the combat gate below: a tap's own
 	-- staleness problem exists whether or not the wheel itself is allowed to open, so
@@ -722,10 +761,11 @@ function Controller:OnOpen(ring)
 		openIdentity = ns.IdentifyUnit(resolved)
 		openContext = ns.CaptureContext(resolved)
 	end
-	local tapResolved = resolveActiveUnit(ns.GetSettings().quickNoteHoverEnabled)
+	local tapResolved = resolveActiveUnit(ns.GetSettings().quickNoteHoverEnabled, ns.GetSettings().tapTargetEnabled)
 	if tapResolved then
 		tapIdentity = ns.IdentifyUnit(tapResolved)
 		tapContext = ns.CaptureContext(tapResolved)
+		tapIsHover = (tapResolved == "mouseover")
 	end
 
 	-- disableInCombat only gates the wheel itself, never the plain-tap Quick Note
@@ -739,7 +779,11 @@ function Controller:OnOpen(ring)
 	end
 
 	openPresets = openIdentity and ns.GetRadialPresetSet(ring) or nil
-	if not openPresets or #openPresets == 0 then
+	-- an enabled second radial with nothing picked still opens, showing a hint, so a
+	-- held key doesn't silently turn into a tap (releasing it just cancels)
+	local showEmpty = ring == 2 and openPresets ~= nil and #openPresets == 0
+		and ns.GetSettings().radialMenu.secondEnabled
+	if not showEmpty and (not openPresets or #openPresets == 0) then
 		openPresets = nil
 		ringButton:SetAttribute("wr-active", false)
 		return
@@ -763,6 +807,7 @@ function Controller:OnOpen(ring)
 	-- positioning reads each label's own rendered size, so it has to run after the
 	-- text above is actually set, not before
 	positionLabels(#openPresets)
+	wheel.emptyText:SetShown(showEmpty)
 
 	local x, y = GetCursorPosition()
 	local scale = UIParent:GetEffectiveScale()
@@ -808,10 +853,12 @@ function Controller:OnTap(ring, immediate)
 	-- reuse, and have had zero time to go stale anyway, so those still resolve fresh
 	-- via ns.QuickNoteTarget() same as a plain non-radial tap would.
 	local identity = tapIdentity
+	local isHover = tapIsHover
 	closeWheel()
 	if consumeEscCancel() then return end
 	if not immediate and identity then
-		ns.QuickNoteIdentity(identity)
+		local action = isHover and ns.GetSettings().tapHoverAction or ns.GetSettings().tapTargetAction
+		ns.PerformTapAction(action, identity)
 	else
 		ns.QuickNoteTarget()
 	end
@@ -856,6 +903,7 @@ local function rebuild()
 	local settings = ns.GetSettings().radialMenu
 	RingButton1:SetAttribute("wr-count", #ns.GetRadialPresetSet(1))
 	RingButton2:SetAttribute("wr-count", settings.secondEnabled and #ns.GetRadialPresetSet(2) or 0)
+	RingButton2:SetAttribute("wr-showempty", settings.secondEnabled and true or false)
 
 	if not settings.enabled then
 		return

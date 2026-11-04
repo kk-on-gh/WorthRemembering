@@ -1,8 +1,8 @@
-## Interface: 16001
+## Interface: 16001, 120105
 ## Title: Worth Remembering
 ## Notes: Keep distinct, timestamped notes and a -100..+100 standing on players you meet.
 ## Author: Kyle
-## Version: 0.5.11
+## Version: 1.0
 ## SavedVariables: WorthRememberingDB
 ## IconTexture: Interface\AddOns\WorthRemembering\Media\MinimapIcon.png
 ## X-Category: Miscellaneous
@@ -16,6 +16,7 @@ Core/Identity.lua
 Core/ChatIndicator.lua
 Core/Nameplates.lua
 Core/AutoTrack.lua
+Core/RecentAllies.lua
 Core/Events.lua
 Core/Slash.lua
 Core/ContextMenu.lua

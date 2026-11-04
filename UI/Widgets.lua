@@ -58,10 +58,24 @@ local SMALL_BACKDROP = {
 	edgeSize = 1,
 }
 
+local BORDER_PIECES = {
+	"TopEdge", "BottomEdge", "LeftEdge", "RightEdge",
+	"TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner",
+}
+
 local function applySmallBackdrop(frame)
 	frame:SetBackdrop(SMALL_BACKDROP)
 	frame:SetBackdropColor(0.08, 0.06, 0.03, 0.9)
 	frame:SetBackdropBorderColor(1, 0.82, 0, 0.5)
+	-- a 1px edge snapped to the pixel grid rounds away entirely when a scroll offset
+	-- leaves it between pixels
+	for _, pieceName in ipairs(BORDER_PIECES) do
+		local piece = frame[pieceName]
+		if piece and piece.SetSnapToPixelGrid then
+			piece:SetSnapToPixelGrid(false)
+			piece:SetTexelSnappingBias(0)
+		end
+	end
 end
 
 local smallTooltip
@@ -157,6 +171,36 @@ function ns.CreateSmallEditBox(parent, width, height, numeric)
 	if numeric then
 		box:SetNumeric(true)
 	end
+
+	-- clicking away clears the selection, so only the box being edited ever shows one.
+	-- callers set their own OnEditFocusLost after this, so it's wrapped on the way in
+	local setScript = box.SetScript
+	function box:SetScript(scriptName, handler)
+		if scriptName == "OnEditFocusLost" then
+			local callerHandler = handler
+			handler = function(self, ...)
+				self:HighlightText(0, 0)
+				if callerHandler then
+					return callerHandler(self, ...)
+				end
+			end
+		end
+		return setScript(self, scriptName, handler)
+	end
+	box:SetScript("OnEditFocusLost", nil)
+
+	-- double-click selects everything
+	local lastClickAt = 0
+	box:HookScript("OnMouseUp", function(self)
+		local now = GetTime()
+		if now - lastClickAt < 0.35 then
+			self:HighlightText()
+			lastClickAt = 0
+		else
+			lastClickAt = now
+		end
+	end)
+
 	return box
 end
 
@@ -282,7 +326,9 @@ function ns.CreateMultiSelectDropdown(parent, options, isSelected, toggle, getSu
 	if ok and dropdown and dropdown.SetupMenu then
 		dropdown:SetupMenu(function(_, rootDescription)
 			if clearText then
-				rootDescription:CreateButton(clearText, function()
+				-- can be a function, for wording that follows a setting
+				local text = type(clearText) == "function" and clearText() or clearText
+				rootDescription:CreateButton(text, function()
 					onClear()
 					refreshDisplayText()
 				end)
@@ -318,6 +364,8 @@ function ns.CreateMultiSelectDropdown(parent, options, isSelected, toggle, getSu
 	-- also re-applied on every show, since the auto-generated label re-asserts itself
 	-- again when the dropdown becomes visible (e.g. switching tabs away and back).
 	dropdown:HookScript("OnShow", refreshDisplayText)
+	-- for callers whose selection changes from outside the menu
+	dropdown.RefreshText = refreshDisplayText
 	dropdown:SetSize(width or 180, 22)
 	return dropdown
 end
@@ -482,6 +530,14 @@ end
 --                    -- area's current height allows, recomputed on resize.
 -- }
 -- Returns { container = frame, Refresh = function() end }
+-- a column's label can be a function, for a header whose wording follows a setting
+function ns.ColumnLabel(col)
+	if type(col.label) == "function" then
+		return col.label()
+	end
+	return col.label
+end
+
 function ns.CreateSortableTable(parent, config)
 	local HANDLE_WIDTH = 6
 	local columns = config.columns
@@ -545,6 +601,64 @@ function ns.CreateSortableTable(parent, config)
 			end
 		end
 	end
+	-- display order, from the user's saved order (settings.columnOrder) when there is
+	-- one. columns missing from it (added in a later version) go right after their
+	-- usual left neighbor
+	local ordered = {}
+	do
+		local byKey, used = {}, {}
+		for _, col in ipairs(columns) do
+			byKey[col.key] = col
+		end
+		local saved = config.tableId and ns.GetSettings().columnOrder[config.tableId]
+		if saved then
+			for _, key in ipairs(saved) do
+				if byKey[key] and not used[key] then
+					used[key] = true
+					ordered[#ordered + 1] = byKey[key]
+				end
+			end
+		end
+		for i, col in ipairs(columns) do
+			if not used[col.key] then
+				used[col.key] = true
+				local insertAt = 1
+				local previous = columns[i - 1]
+				for j, existing in ipairs(ordered) do
+					if previous and existing.key == previous.key then
+						insertAt = j + 1
+						break
+					end
+				end
+				table.insert(ordered, insertAt, col)
+			end
+		end
+	end
+
+	local function saveOrder()
+		if not config.tableId then
+			return
+		end
+		local keys = {}
+		for i, col in ipairs(ordered) do
+			keys[i] = col.key
+		end
+		ns.GetSettings().columnOrder[config.tableId] = keys
+	end
+
+	-- the visible column right after the flex column, whose width the flex column's own
+	-- resize handle drags (the flex column has no fixed width of its own)
+	local function columnAfterFlex()
+		local passedFlex = false
+		for _, col in ipairs(ordered) do
+			if col.key == flexKey then
+				passedFlex = true
+			elseif passedFlex and isColumnVisible(col.key) then
+				return col
+			end
+		end
+	end
+
 	local sortKey = config.defaultSort and config.defaultSort.key or columns[1].key
 	local sortDir = config.defaultSort and config.defaultSort.dir or "desc"
 	-- pageSize = "auto" fits however many rows the scroll area's current height allows,
@@ -606,6 +720,8 @@ function ns.CreateSortableTable(parent, config)
 	end
 
 	local scroll = CreateFrame("ScrollFrame", nil, container, "UIPanelScrollFrameTemplate")
+
+	ns.SetGentleScroll(scroll)
 	scroll:SetPoint("TOPLEFT", 0, -24)
 	scroll:SetPoint("BOTTOMRIGHT", -scrollbarInset, pageSize and PAGE_BAR_HEIGHT or 0)
 	local scrollChild = CreateFrame("Frame", nil, scroll)
@@ -640,6 +756,8 @@ function ns.CreateSortableTable(parent, config)
 	scrollChild:SetWidth(scroll:GetWidth())
 
 	local headerCells, headerLabels, headerArrows, headerHandles = {}, {}, {}, {}
+	local startColumnDrag, finishColumnDrag
+	local suppressHeaderClick = false
 	local rows = {}
 	local items = {}
 
@@ -653,7 +771,7 @@ function ns.CreateSortableTable(parent, config)
 		local trailing = 0
 		do
 			local passedFlex = false
-			for _, col in ipairs(columns) do
+			for _, col in ipairs(ordered) do
 				if col.key == flexKey then
 					passedFlex = true
 				elseif passedFlex and isColumnVisible(col.key) then
@@ -671,7 +789,7 @@ function ns.CreateSortableTable(parent, config)
 		-- instead of overlapping itself when the table truly can't fit everything.
 		local availableWidth = header:GetWidth()
 		local x = 4
-		for _, col in ipairs(columns) do
+		for _, col in ipairs(ordered) do
 			local isFlex = col.key == flexKey
 			local cell = headerCells[col.key]
 			local handle = headerHandles[col.key]
@@ -706,7 +824,8 @@ function ns.CreateSortableTable(parent, config)
 					-- comfortably fits. check the handle's own projected right edge
 					-- instead of reusing the cell's offScreen flag.
 					local handleOffScreen = (x + width + 6 + HANDLE_WIDTH / 2) > availableWidth
-					handle:SetShown(not handleOffScreen)
+					-- the flex column's handle only exists to resize whatever follows it
+					handle:SetShown(not handleOffScreen and not (isFlex and not columnAfterFlex()))
 					handle:ClearAllPoints()
 					-- relative to the cell's own live right edge, not a computed x.
 					-- the +6 undoes the cell's own -6 width inset, so this lands where
@@ -747,7 +866,7 @@ function ns.CreateSortableTable(parent, config)
 		for _, col in ipairs(columns) do
 			local active = col.key == sortKey
 			local label = headerLabels[col.key]
-			label:SetText(col.label)
+			label:SetText(ns.ColumnLabel(col))
 			if active then
 				label:SetTextColor(1, 1, 1)
 			else
@@ -767,11 +886,17 @@ function ns.CreateSortableTable(parent, config)
 
 	local function refresh()
 		items = config.getItems()
+		-- each item's sort value computed once up front, not twice per comparison
+		local sortValues = {}
+		for _, item in ipairs(items) do
+			sortValues[item] = config.sortValue(item, sortKey)
+		end
+		local ascending = sortDir == "asc"
 		table.sort(items, function(a, b)
-			local av, bv = config.sortValue(a, sortKey), config.sortValue(b, sortKey)
+			local av, bv = sortValues[a], sortValues[b]
 			if av == bv then
 				return false
-			elseif sortDir == "asc" then
+			elseif ascending then
 				return av < bv
 			end
 			return av > bv
@@ -910,6 +1035,7 @@ function ns.CreateSortableTable(parent, config)
 		end
 
 		relayout()
+		updateArrows()
 
 		for i, row in ipairs(rows) do
 			local item = pageItems[i]
@@ -966,7 +1092,7 @@ function ns.CreateSortableTable(parent, config)
 	-- the flex column's right edge, which drags the WIDTH OF THE NEXT COLUMN instead of
 	-- its own (the flex column has no fixed width to drag), so dragging left (shrinking
 	-- the flex region) has to GROW that column, not shrink it.
-	local function createResizeHandle(ownerKey, targetCol, invert)
+	local function createResizeHandle(ownerKey, getTargetCol, invert)
 		local handle = CreateFrame("Button", nil, header)
 		handle:SetSize(HANDLE_WIDTH, 18)
 		handle:EnableMouse(true)
@@ -981,7 +1107,12 @@ function ns.CreateSortableTable(parent, config)
 		hoverHighlight:Hide()
 		handle:SetScript("OnEnter", function() hoverHighlight:Show() end)
 		handle:SetScript("OnLeave", function() hoverHighlight:Hide() end)
+		local targetCol
 		handle:SetScript("OnMouseDown", function()
+			targetCol = getTargetCol()
+			if not targetCol then
+				return
+			end
 			local startX = GetCursorPosition()
 			local startWidth = targetCol.width
 			handle:SetScript("OnUpdate", function()
@@ -993,7 +1124,7 @@ function ns.CreateSortableTable(parent, config)
 		end)
 		handle:SetScript("OnMouseUp", function()
 			handle:SetScript("OnUpdate", nil)
-			if config.tableId then
+			if targetCol and config.tableId then
 				local widths = ns.GetSettings().columnWidths
 				widths[config.tableId] = widths[config.tableId] or {}
 				widths[config.tableId][targetCol.key] = targetCol.width
@@ -1002,7 +1133,104 @@ function ns.CreateSortableTable(parent, config)
 		headerHandles[ownerKey] = handle
 	end
 
-	for i, col in ipairs(columns) do
+	-- drag a header cell left/right to move its column. columns reflow live as the
+	-- cursor passes a neighbor's midpoint, with the dragged column highlighted top to
+	-- bottom, so the table already shows the result before release
+	local dragOverlay = CreateFrame("Frame", nil, container)
+	dragOverlay:SetFrameLevel(container:GetFrameLevel() + 20)
+	dragOverlay:EnableMouse(false)
+	local dragOverlayFill = dragOverlay:CreateTexture(nil, "OVERLAY")
+	dragOverlayFill:SetAllPoints()
+	dragOverlayFill:SetColorTexture(1, 0.82, 0, 0.14)
+	local dragOverlayEdgeL = dragOverlay:CreateTexture(nil, "OVERLAY")
+	dragOverlayEdgeL:SetPoint("TOPLEFT")
+	dragOverlayEdgeL:SetPoint("BOTTOMLEFT")
+	dragOverlayEdgeL:SetWidth(1)
+	dragOverlayEdgeL:SetColorTexture(1, 0.82, 0, 0.8)
+	local dragOverlayEdgeR = dragOverlay:CreateTexture(nil, "OVERLAY")
+	dragOverlayEdgeR:SetPoint("TOPRIGHT")
+	dragOverlayEdgeR:SetPoint("BOTTOMRIGHT")
+	dragOverlayEdgeR:SetWidth(1)
+	dragOverlayEdgeR:SetColorTexture(1, 0.82, 0, 0.8)
+	dragOverlay:Hide()
+
+	local draggingCol
+
+	local function cursorX()
+		return GetCursorPosition() / header:GetEffectiveScale()
+	end
+
+	local function indexOf(col)
+		for i, c in ipairs(ordered) do
+			if c == col then
+				return i
+			end
+		end
+	end
+
+	-- nearest visible, on-screen column before (step -1) or after (step 1) index i
+	local function visibleNeighbor(i, step)
+		local j = i + step
+		while ordered[j] do
+			local c = ordered[j]
+			if isColumnVisible(c.key) and headerCells[c.key]:IsShown() then
+				return j, c
+			end
+			j = j + step
+		end
+	end
+
+	local function midpoint(col)
+		local cell = headerCells[col.key]
+		return (cell:GetLeft() + cell:GetRight()) / 2
+	end
+
+	-- swapping past a neighbor puts its midpoint on the far side of the cursor, so
+	-- this settles instead of flip-flopping between two spots
+	local function updateColumnDrag()
+		local x = cursorX()
+		for _ = 1, #ordered do
+			local i = indexOf(draggingCol)
+			local nextIndex, nextCol = visibleNeighbor(i, 1)
+			local prevIndex, prevCol = visibleNeighbor(i, -1)
+			if nextCol and x > midpoint(nextCol) then
+				table.remove(ordered, i)
+				table.insert(ordered, nextIndex, draggingCol)
+			elseif prevCol and x < midpoint(prevCol) then
+				table.remove(ordered, i)
+				table.insert(ordered, prevIndex, draggingCol)
+			else
+				break
+			end
+			relayout()
+		end
+	end
+
+	function startColumnDrag(col)
+		draggingCol = col
+		local cell = headerCells[col.key]
+		dragOverlay:ClearAllPoints()
+		dragOverlay:SetPoint("TOPLEFT", cell, "TOPLEFT", -3, 1)
+		dragOverlay:SetPoint("TOPRIGHT", cell, "TOPRIGHT", 3, 1)
+		dragOverlay:SetPoint("BOTTOM", scroll, "BOTTOM", 0, 0)
+		dragOverlay:Show()
+		header:SetScript("OnUpdate", updateColumnDrag)
+	end
+
+	function finishColumnDrag()
+		header:SetScript("OnUpdate", nil)
+		dragOverlay:Hide()
+		if not draggingCol then
+			return
+		end
+		draggingCol = nil
+		suppressHeaderClick = true
+		C_Timer.After(0, function() suppressHeaderClick = false end)
+		saveOrder()
+		relayout()
+	end
+
+	for _, col in ipairs(columns) do
 		local isFlex = col.key == flexKey
 		local button = CreateFrame("Button", nil, header)
 		button:SetHeight(18)
@@ -1025,7 +1253,7 @@ function ns.CreateSortableTable(parent, config)
 		fs:SetJustifyH("LEFT")
 		fs:SetWordWrap(true)
 		fs:SetMaxLines(1)
-		fs:SetText(col.label)
+		fs:SetText(ns.ColumnLabel(col))
 
 		if not col.noSort then
 			local arrowIcon = button:CreateTexture(nil, "ARTWORK")
@@ -1036,6 +1264,10 @@ function ns.CreateSortableTable(parent, config)
 
 			button:RegisterForClicks("LeftButtonUp")
 			button:SetScript("OnClick", function()
+				-- releasing a header drag can also count as a click
+				if suppressHeaderClick then
+					return
+				end
 				if sortKey == col.key then
 					sortDir = (sortDir == "desc") and "asc" or "desc"
 				else
@@ -1050,10 +1282,14 @@ function ns.CreateSortableTable(parent, config)
 		headerLabels[col.key] = fs
 
 		if not isFlex then
-			createResizeHandle(col.key, col, false)
-		elseif columns[i + 1] then
-			createResizeHandle(col.key, columns[i + 1], true)
+			createResizeHandle(col.key, function() return col end, false)
+		else
+			createResizeHandle(col.key, columnAfterFlex, true)
 		end
+
+		button:RegisterForDrag("LeftButton")
+		button:SetScript("OnDragStart", function() startColumnDrag(col) end)
+		button:SetScript("OnDragStop", function() finishColumnDrag() end)
 	end
 
 	updateArrows()
@@ -1078,8 +1314,59 @@ function ns.CreateSortableTable(parent, config)
 	return {
 		container = container,
 		Refresh = refresh,
+		-- rows matched by the last Refresh, across every page
+		GetItemCount = function() return #items end,
 		IsColumnVisible = isColumnVisible,
 		SetColumnVisible = setColumnVisible,
 		IsColumnHideable = isHideable,
 	}
+end
+
+-- saved drag positions for popups, in settings.windowPositions[key] as the frame's
+-- TOPLEFT relative to UIParent's BOTTOMLEFT. cleared by Reset UI
+function ns.SavePopupPosition(frame, key)
+	ns.GetSettings().windowPositions[key] = { x = frame:GetLeft(), y = frame:GetTop() }
+end
+
+-- falls back to point/relativePoint/x/y (default CENTER) when nothing's saved
+function ns.RestorePopupPosition(frame, key, point, relativePoint, x, y)
+	local saved = ns.GetSettings().windowPositions[key]
+	frame:ClearAllPoints()
+	if saved and saved.x and saved.y then
+		frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", saved.x, saved.y)
+	else
+		frame:SetPoint(point or "CENTER", UIParent, relativePoint or point or "CENTER", x or 0, y or 0)
+	end
+end
+
+-- drag handlers that also save the position on release
+function ns.MakePopupDraggable(frame, key)
+	-- otherwise the client's own layout cache can restore a stale spot over ours
+	if frame.SetDontSavePosition then
+		frame:SetDontSavePosition(true)
+	end
+	frame:SetMovable(true)
+	frame:EnableMouse(true)
+	frame:RegisterForDrag("LeftButton")
+	frame:SetScript("OnDragStart", frame.StartMoving)
+	frame:SetScript("OnDragStop", function(self)
+		self:StopMovingOrSizing()
+		ns.SavePopupPosition(self, key)
+	end)
+end
+
+-- one wheel click scrolls a quarter of the visible height instead of the template's
+-- default half, which jumped too far in a tall window. at least 20px (about one row),
+-- so a very short scroll area (a Nearby window shrunk to one row) still moves
+local MIN_SCROLL_STEP = 20
+
+function ns.SetGentleScroll(scroll)
+	scroll:SetScript("OnMouseWheel", function(self, delta)
+		local bar = self.ScrollBar
+		if not bar then
+			return
+		end
+		local step = math.max(MIN_SCROLL_STEP, self:GetHeight() / 4)
+		bar:SetValue(bar:GetValue() - delta * step)
+	end)
 end

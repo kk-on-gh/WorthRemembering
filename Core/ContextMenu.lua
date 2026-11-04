@@ -65,6 +65,9 @@ local function identityFromContext(contextData)
 end
 
 local function onMenuOpen(_, rootDescription, contextData)
+	if not ns.GetSettings().contextMenuEnabled then
+		return
+	end
 	local identity = identityFromContext(contextData)
 	if not identity then
 		return

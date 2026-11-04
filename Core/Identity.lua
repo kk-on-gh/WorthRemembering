@@ -123,17 +123,80 @@ function ns.LiveIdentityForRecord(record)
 		guid = record.guid,
 		classFile = record.classFile,
 		race = record.race,
+		raceID = record.raceID,
 		faction = record.faction,
+		sex = record.sex,
+		sexRaw = record.sexRaw,
 	}, nil
 end
 
--- Forever races come back as "<Epithet> <Race>" (e.g. "Windshaper Skyborne"), keep
--- just the last word. exposed so old records normalize without a migration
-function ns.SimplifyRace(race)
+-- every race name the client knows, longest first, built on first use
+local knownRaceNames
+
+local function getKnownRaceNames()
+	if knownRaceNames then
+		return knownRaceNames
+	end
+	knownRaceNames = {}
+	if C_CreatureInfo and C_CreatureInfo.GetRaceInfo then
+		local seen = {}
+		for id = 1, 200 do
+			local info = C_CreatureInfo.GetRaceInfo(id)
+			local raceName = info and info.raceName
+			if raceName and raceName ~= "" and not seen[raceName] then
+				seen[raceName] = true
+				knownRaceNames[#knownRaceNames + 1] = raceName
+			end
+		end
+	end
+	table.sort(knownRaceNames, function(a, b) return #a > #b end)
+	return knownRaceNames
+end
+
+local function endsWithRace(text, raceName)
+	return text == raceName or text:sub(-(#raceName + 1)) == " " .. raceName
+end
+
+-- Forever races come back as "<Epithet> <Race>" (e.g. "Windshaper Skyborne"), strips
+-- the epithet while keeping multi-word races whole ("Blood Elf", "Kul Tiran"). raceID
+-- (UnitRace's 3rd return) pins the exact race when known. also used at display time so
+-- older records normalize without a migration
+function ns.SimplifyRace(race, raceID)
 	if not race then
 		return nil
 	end
+	if raceID and C_CreatureInfo and C_CreatureInfo.GetRaceInfo then
+		local info = C_CreatureInfo.GetRaceInfo(raceID)
+		if info and info.raceName and endsWithRace(race, info.raceName) then
+			return info.raceName
+		end
+	end
+	for _, raceName in ipairs(getKnownRaceNames()) do
+		if endsWithRace(race, raceName) then
+			return raceName
+		end
+	end
 	return race:match("(%S+)$") or race
+end
+
+local raceNameByID = {}
+
+-- the race to show for a record: looked up from its raceID in the client's own language
+-- when it has one, else the saved name (older records, until they're seen again)
+function ns.RaceDisplay(record)
+	local raceID = record.raceID
+	if raceID then
+		local name = raceNameByID[raceID]
+		if not name and C_CreatureInfo and C_CreatureInfo.GetRaceInfo then
+			local info = C_CreatureInfo.GetRaceInfo(raceID)
+			name = info and info.raceName
+			raceNameByID[raceID] = name
+		end
+		if name and name ~= "" then
+			return name
+		end
+	end
+	return ns.SimplifyRace(record.race)
 end
 
 -- unit token to {key, name, realmOrSurname, guid, classFile, race, faction}, nil if
@@ -152,7 +215,8 @@ function ns.IdentifyUnit(unit)
 	end
 
 	local _, classFile = UnitClass(unit)
-	local race = ns.SimplifyRace(UnitRace(unit))
+	local raceName, _, raceID = UnitRace(unit)
+	local race = ns.SimplifyRace(raceName, raceID)
 	local faction = UnitFactionGroup(unit)
 
 	return {
@@ -162,6 +226,9 @@ function ns.IdentifyUnit(unit)
 		guid = guid,
 		classFile = classFile,
 		race = race,
+		raceID = raceID,
 		faction = faction,
+		sex = ns.NormalizeUnitSex(ns.SafeUnitSex(unit)),
+		sexRaw = ns.RawSexTag("unit", ns.SafeUnitSex(unit)),
 	}
 end

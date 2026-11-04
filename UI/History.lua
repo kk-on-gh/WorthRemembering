@@ -65,6 +65,9 @@ local sourceFilter = ns.CreateFilterSet()
 local characterFilter = ns.CreateFilterSet()
 local classFilter = ns.CreateFilterSet()
 local raceFilter = ns.CreateFilterSet()
+local sexFilter = ns.CreateFilterSet()
+-- filled once settings exist, then kept current by refreshSexFilterDropdown
+local sexFilterOptions = {}
 local factionFilter = ns.CreateFilterSet()
 
 local SIGN_OPTIONS = {
@@ -72,10 +75,70 @@ local SIGN_OPTIONS = {
 	{ value = "negative", text = "Negative" },
 }
 
-local SOURCE_OPTIONS = {
-	{ value = "manual", text = "Manual" },
-	{ value = "auto", text = "Auto" },
-}
+-- "allauto" isn't a real category, it toggles every isAuto category at once and shows
+-- as checked when they're all selected
+local ALL_AUTO = "allauto"
+local SOURCE_OPTIONS = {}
+local AUTO_SOURCE_KEYS = {}
+for _, category in ipairs(ns.SOURCE_CATEGORIES) do
+	if not category.isAuto then
+		SOURCE_OPTIONS[#SOURCE_OPTIONS + 1] = { value = category.key, text = category.label }
+	end
+end
+SOURCE_OPTIONS[#SOURCE_OPTIONS + 1] = { value = ALL_AUTO, text = "All auto" }
+for _, category in ipairs(ns.SOURCE_CATEGORIES) do
+	if category.isAuto then
+		SOURCE_OPTIONS[#SOURCE_OPTIONS + 1] = { value = category.key, text = category.label, isAuto = true }
+		AUTO_SOURCE_KEYS[#AUTO_SOURCE_KEYS + 1] = category.key
+	end
+end
+
+local function allAutoSourcesSelected()
+	for _, key in ipairs(AUTO_SOURCE_KEYS) do
+		if not sourceFilter.selected[key] then
+			return false
+		end
+	end
+	return true
+end
+
+local function isSourceSelected(value)
+	if value == ALL_AUTO then
+		return allAutoSourcesSelected()
+	end
+	return sourceFilter.selected[value] == true
+end
+
+local function toggleSource(value)
+	if value ~= ALL_AUTO then
+		sourceFilter:Toggle(value)
+		return
+	end
+	local selectAll = not allAutoSourcesSelected()
+	for _, key in ipairs(AUTO_SOURCE_KEYS) do
+		if (sourceFilter.selected[key] == true) ~= selectAll then
+			sourceFilter:Toggle(key)
+		end
+	end
+end
+
+local function sourceSummaryText()
+	if sourceFilter.count == 0 then
+		return "Source"
+	end
+	local names = {}
+	local allAuto = allAutoSourcesSelected()
+	for _, option in ipairs(SOURCE_OPTIONS) do
+		if option.value == ALL_AUTO then
+			if allAuto then
+				names[#names + 1] = option.text
+			end
+		elseif sourceFilter.selected[option.value] and not (option.isAuto and allAuto) then
+			names[#names + 1] = option.text
+		end
+	end
+	return table.concat(names, ", ")
+end
 
 local function getCharacterOptions()
 	local options = {}
@@ -134,8 +197,7 @@ local function matchesSource(entry)
 	if sourceFilter.count == 0 then
 		return true
 	end
-	local value = ns.IsAutoSource(entry.source) and "auto" or "manual"
-	return sourceFilter:Matches(value)
+	return sourceFilter:Matches(ns.SourceCategory(entry.source))
 end
 
 local function matchesCharacter(entry)
@@ -149,7 +211,7 @@ local function matchesClassRace(record)
 	if not classFilter:Matches(record.classFile) then
 		return false
 	end
-	if not raceFilter:Matches(ns.SimplifyRace(record.race)) then
+	if not raceFilter:Matches(ns.RaceDisplay(record)) then
 		return false
 	end
 	if not factionFilter:Matches(record.faction) then
@@ -165,8 +227,30 @@ local function syncClassRaceDropdowns()
 		return
 	end
 	classRaceBar.dropdowns[1]:SetText(classFilter:SummaryText(getClassOptions(), "All classes"))
-	classRaceBar.dropdowns[2]:SetText(raceFilter:SummaryText(getRaceOptions(), "All races"))
-	classRaceBar.dropdowns[3]:SetText(factionFilter:SummaryText(FACTION_OPTIONS, "All factions"))
+	classRaceBar.dropdowns[2]:SetText(sexFilter:SummaryText(ns.FillSexFilterOptions(sexFilterOptions), ns.SexFilterAllText()))
+	classRaceBar.dropdowns[3]:SetText(raceFilter:SummaryText(getRaceOptions(), "All races"))
+	classRaceBar.dropdowns[4]:SetText(factionFilter:SummaryText(FACTION_OPTIONS, "All factions"))
+end
+
+-- just the body type dropdown, cheap enough to run on every refresh so its options and
+-- text follow the display/label settings
+local function refreshSexFilterDropdown()
+	ns.FillSexFilterOptions(sexFilterOptions)
+	if classRaceBar then
+		classRaceBar.dropdowns[2]:SetText(sexFilter:SummaryText(sexFilterOptions, ns.SexFilterAllText()))
+	end
+end
+
+-- click a body type cell to filter to just that value; click it again to clear
+local function onSexCellClick(item)
+	local value = ns.SexFilterKey(item.entry.theirSex)
+	if sexFilter.count == 1 and sexFilter.selected[value] then
+		sexFilter:Clear()
+	else
+		sexFilter:Set(value)
+	end
+	syncClassRaceDropdowns()
+	ns.RefreshHistory()
 end
 
 -- Clears every History filter and syncs every filter widget back to its "all" display.
@@ -179,6 +263,7 @@ local function resetAllHistoryFilters()
 	currentCharOnly = false
 	classFilter:Clear()
 	raceFilter:Clear()
+	sexFilter:Clear()
 	factionFilter:Clear()
 
 	if filterBar then
@@ -192,7 +277,7 @@ local function resetAllHistoryFilters()
 			filterBar.dropdowns[1]:SetText(signFilter:SummaryText(SIGN_OPTIONS, "All standing changes"))
 		end
 		if filterBar.dropdowns[2] then
-			filterBar.dropdowns[2]:SetText(sourceFilter:SummaryText(SOURCE_OPTIONS, "Manual & auto"))
+			filterBar.dropdowns[2]:SetText(sourceSummaryText())
 		end
 	end
 	if charBar then
@@ -212,7 +297,8 @@ local function getItems()
 		local record = ns.GetPlayerRecord(key, false)
 		if record and matchesClassRace(record) then
 			for _, entry in ipairs(record.entries) do
-				if matchesSign(entry) and matchesSource(entry) and matchesNotesOnly(entry) and matchesCharacter(entry) and matchesSearch(record, key, entry) then
+				-- body type filters on the entry's own value (what the column shows), not the record's current one
+				if sexFilter:Matches(ns.SexFilterKey(entry.theirSex)) and matchesSign(entry) and matchesSource(entry) and matchesNotesOnly(entry) and matchesCharacter(entry) and matchesSearch(record, key, entry) then
 					list[#list + 1] = { key = key, record = record, entry = entry }
 				end
 			end
@@ -239,7 +325,7 @@ local function onClassCellClick(item)
 end
 
 local function onRaceCellClick(item)
-	local value = ns.SimplifyRace(item.record.race)
+	local value = ns.RaceDisplay(item.record)
 	if not value then
 		return
 	end
@@ -273,18 +359,18 @@ local function onPlayerCellClick(item)
 	ns.ShowPlayerDetails(item.key)
 end
 
--- Click a Source cell to filter to just Manual or just Auto; click the already-sole-
+-- Click a Source cell to filter to just that source category; click the already-sole-
 -- selected value again to clear it, same toggle convention as the other click-to-filter
 -- columns.
 local function onSourceCellClick(item)
-	local value = ns.IsAutoSource(item.entry.source) and "auto" or "manual"
+	local value = ns.SourceCategory(item.entry.source)
 	if sourceFilter.count == 1 and sourceFilter.selected[value] then
 		sourceFilter:Clear()
 	else
 		sourceFilter:Set(value)
 	end
 	if filterBar and filterBar.dropdowns[2] then
-		filterBar.dropdowns[2]:SetText(sourceFilter:SummaryText(SOURCE_OPTIONS, "Manual & auto"))
+		filterBar.dropdowns[2]:SetText(sourceSummaryText())
 	end
 	ns.RefreshHistory()
 end
@@ -343,16 +429,18 @@ local COLUMNS = {
 	{ key = "select", label = "", width = 26, min = 26, cellType = "checkbox", noSort = true,
 		isVisible = function() return ns.GetSettings().multiSelectEnabled end,
 		onCheckboxClick = function(item, checked) setEntrySelected(item, checked) end },
-	{ key = "time", label = "Time", width = 130, min = 90 },
+	{ key = "time", label = "Time", width = 107, min = 90 },
 	{ key = "player", label = "Player", width = 110, min = 80, onCellClick = onPlayerCellClick },
-	{ key = "race", label = "Race", width = 80, min = 60, onCellClick = onRaceCellClick },
-	{ key = "class", label = "Class", width = 80, min = 60, onCellClick = onClassCellClick },
-	{ key = "faction", label = "Faction", width = 70, min = 60, onCellClick = onFactionCellClick },
+	-- their sex when this entry was logged, not their current one
+	{ key = "sex", label = ns.SexLabel, width = 74, min = 50, onCellClick = onSexCellClick },
+	{ key = "race", label = "Race", width = 60, min = 60, onCellClick = onRaceCellClick },
+	{ key = "class", label = "Class", width = 60, min = 60, onCellClick = onClassCellClick },
+	{ key = "faction", label = "Faction", width = 60, min = 60, onCellClick = onFactionCellClick },
 	{ key = "character", label = "Character", width = 90, min = 60, onCellClick = onCharacterCellClick },
 	{ key = "source", label = "Source", width = 60, min = 50, onCellClick = onSourceCellClick },
-	{ key = "delta", label = "+/-", width = 40, min = 30 },
-	{ key = "yourLevel", label = "Your Lvl", width = 82, min = 50 },
-	{ key = "theirLevel", label = "Their Lvl", width = 86, min = 50 },
+	{ key = "delta", label = "+/-", width = 34, min = 30 },
+	{ key = "yourLevel", label = "Your Lvl", width = 60, min = 50 },
+	{ key = "theirLevel", label = "Their Lvl", width = 63, min = 50 },
 	{ key = "zone", label = "Location", width = 110, min = 60, onCellClick = onZoneCellClick },
 	{ key = "note", label = "Note", width = 0, flex = true },
 	{ key = "featured", label = "Featured", width = 60, min = 50, cellType = "checkbox", onCheckboxClick = onFeaturedCheckboxClick },
@@ -363,8 +451,10 @@ local function sortValue(item, key)
 		return ns.DisplayName(item.record, item.key):lower()
 	elseif key == "class" then
 		return ns.ClassDisplayName(item.record.classFile)
+	elseif key == "sex" then
+		return ns.SexDisplay(item.entry.theirSex) or ""
 	elseif key == "race" then
-		return ns.SimplifyRace(item.record.race) or ""
+		return ns.RaceDisplay(item.record) or ""
 	elseif key == "faction" then
 		return item.record.faction or ""
 	elseif key == "character" then
@@ -393,7 +483,8 @@ local function render(row, item)
 
 	row.cells.class:SetText(ns.ClassDisplayName(record.classFile))
 	row.cells.class:SetTextColor(cr, cg, cb)
-	row.cells.race:SetText(ns.SimplifyRace(record.race) or "-")
+	row.cells.sex:SetText(ns.SexDisplay(entry.theirSex) or "-")
+	row.cells.race:SetText(ns.RaceDisplay(record) or "-")
 
 	local fr, fg, fb = ns.FactionColor(record.faction)
 	row.cells.faction:SetText(record.faction or "-")
@@ -401,13 +492,8 @@ local function render(row, item)
 
 	row.cells.character:SetText(entry.loggedBy or "-")
 
-	if ns.IsAutoSource(entry.source) then
-		row.cells.source:SetText("Auto")
-		row.cells.source:SetTextColor(0.55, 0.75, 1)
-	else
-		row.cells.source:SetText("Manual")
-		row.cells.source:SetTextColor(0.8, 0.8, 0.8)
-	end
+	row.cells.source:SetText(ns.SourceLabel(entry.source))
+	row.cells.source:SetTextColor(ns.SourceColor(entry.source))
 
 	if entry.delta and entry.delta ~= 0 then
 		local r, g, b = ns.StandingColor(entry.delta, 0)
@@ -432,16 +518,16 @@ local function render(row, item)
 end
 
 function ns.RefreshHistory()
-	if not table_ then
+	-- walks every entry of every player, so it only runs while History is on screen
+	if not table_ or not ns.IsTabVisible(2) then
 		return
 	end
+	refreshSexFilterDropdown()
 	table_.Refresh()
-	local count = #getItems()
+	local count = table_.GetItemCount()
 	local countText = count == 1 and "1 entry" or (count .. " entries")
 	filterBar.countLabel:SetText(countText)
-	-- runs on every RefreshAllTabs call, not just while History is visible. without
-	-- this guard it'd stomp the footer with History's wording on any other tab
-	if ns.RefreshFooter and ns.GetSelectedTab and ns.GetSelectedTab() == 2 then
+	if ns.RefreshFooter then
 		ns.RefreshFooter(countText .. " shown")
 	end
 end
@@ -474,10 +560,10 @@ function ns.BuildHistoryPanel(parent)
 			{
 				multi = true,
 				options = SOURCE_OPTIONS,
-				isSelected = function(value) return sourceFilter.selected[value] == true end,
-				toggle = function(value) sourceFilter:Toggle(value); ns.RefreshHistory() end,
-				getSummaryText = function() return sourceFilter:SummaryText(SOURCE_OPTIONS, "Manual & auto") end,
-				clearText = "Manual & auto",
+				isSelected = isSourceSelected,
+				toggle = function(value) toggleSource(value); ns.RefreshHistory() end,
+				getSummaryText = sourceSummaryText,
+				clearText = "All sources",
 				onClear = function() sourceFilter:Clear(); ns.RefreshHistory() end,
 				width = 140,
 			},
@@ -543,6 +629,16 @@ function ns.BuildHistoryPanel(parent)
 				getSummaryText = function() return classFilter:SummaryText(getClassOptions(), "All classes") end,
 				clearText = "All classes",
 				onClear = function() classFilter:Clear(); syncClassRaceDropdowns(); ns.RefreshHistory() end,
+				width = 140,
+			},
+			{
+				multi = true,
+				options = sexFilterOptions,
+				isSelected = function(value) return sexFilter.selected[value] == true end,
+				toggle = function(value) sexFilter:Toggle(value); syncClassRaceDropdowns(); ns.RefreshHistory() end,
+				getSummaryText = function() return sexFilter:SummaryText(ns.FillSexFilterOptions(sexFilterOptions), ns.SexFilterAllText()) end,
+				clearText = ns.SexFilterAllText,
+				onClear = function() sexFilter:Clear(); syncClassRaceDropdowns(); ns.RefreshHistory() end,
 				width = 140,
 			},
 			{
@@ -615,7 +711,7 @@ function ns.BuildHistoryPanel(parent)
 		local opts = {}
 		for _, col in ipairs(COLUMNS) do
 			if table_.IsColumnHideable(col.key) then
-				opts[#opts + 1] = { value = col.key, text = col.label }
+				opts[#opts + 1] = { value = col.key, text = ns.ColumnLabel(col) }
 			end
 		end
 		return opts

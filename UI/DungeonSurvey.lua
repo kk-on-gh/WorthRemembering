@@ -319,7 +319,7 @@ local function refreshRows()
 	relayoutColumns()
 end
 
-local function saveAll()
+local function saveRows()
 	local settings = ns.GetSettings().dungeonTracking.survey
 	for i = 1, #members do
 		local row = rows[i]
@@ -334,7 +334,7 @@ local function saveAll()
 			end
 			entry.zone = instanceName
 			entry.delta = delta ~= 0 and delta or nil
-			entry.source = "manual"
+			entry.source = "survey"
 			if noteText ~= "" then
 				-- both the prefix AND the row's own note text get filled (a role
 				-- preset's text, or whatever was typed/edited by hand, can use {{loc}}
@@ -346,6 +346,10 @@ local function saveAll()
 			ns.AddEntry(member.identity.key, member.identity, entry)
 		end
 	end
+end
+
+local function saveAll()
+	ns.RunEntryBatch(saveRows)
 	ns.RefreshAllTabs()
 	popup:Hide()
 end
@@ -394,6 +398,7 @@ local function createResizeGrip()
 		resizing = false
 		local s = ns.GetSettings().dungeonTracking.survey
 		s.windowWidth, s.windowHeight = popup:GetSize()
+		ns.SavePopupPosition(popup, "survey")
 	end)
 	return grip
 end
@@ -409,12 +414,12 @@ local function createPopup()
 	local savedWidth = math.max(saved.windowWidth or POPUP_WIDTH, MIN_WIDTH)
 	local savedHeight = math.max(saved.windowHeight or DEFAULT_POPUP_HEIGHT, MIN_HEIGHT)
 	popup:SetSize(math.min(savedWidth, UIParent:GetWidth()), math.min(savedHeight, UIParent:GetHeight()))
-	popup:SetPoint("CENTER")
 	popup:SetFrameStrata("DIALOG")
 	popup:SetToplevel(true)
 	popup:SetClampedToScreen(true)
 	popup:SetScale(ns.GetSettings().uiScale)
-	popup:SetMovable(true)
+	ns.RestorePopupPosition(popup, "survey")
+	ns.MakePopupDraggable(popup, "survey")
 	popup:SetResizable(true)
 	if popup.SetResizeBounds then
 		popup:SetResizeBounds(MIN_WIDTH, MIN_HEIGHT, UIParent:GetWidth(), UIParent:GetHeight())
@@ -422,10 +427,6 @@ local function createPopup()
 		popup:SetMinResize(MIN_WIDTH, MIN_HEIGHT)
 		popup:SetMaxResize(UIParent:GetWidth(), UIParent:GetHeight())
 	end
-	popup:EnableMouse(true)
-	popup:RegisterForDrag("LeftButton")
-	popup:SetScript("OnDragStart", popup.StartMoving)
-	popup:SetScript("OnDragStop", popup.StopMovingOrSizing)
 	popup:SetScript("OnMouseDown", function() popup:Raise() end)
 	popup:SetBackdrop({
 		edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
@@ -470,6 +471,8 @@ local function createPopup()
 	repHeader:SetText("Rep")
 
 	popup.scroll = CreateFrame("ScrollFrame", nil, popup, "UIPanelScrollFrameTemplate")
+
+	ns.SetGentleScroll(popup.scroll)
 	popup.scroll:SetPoint("TOPLEFT", 20, -72)
 	popup.scroll:SetPoint("BOTTOMRIGHT", -34, 46)
 	-- fires on every resize (live during a grip drag, and once right after this
@@ -533,41 +536,19 @@ end
 local confirmPrompt
 local confirmMembers, confirmZoneName
 
-local function saveConfirmPosition()
-	local anchor = "TOPLEFT"
-	ns.GetSettings().dungeonTracking.survey.confirmPoint = {
-		anchor = anchor,
-		x = confirmPrompt:GetLeft(),
-		y = confirmPrompt:GetTop(),
-	}
-end
-
 local function restoreConfirmPosition()
-	local p = ns.GetSettings().dungeonTracking.survey.confirmPoint
-	confirmPrompt:ClearAllPoints()
-	if p and p.anchor then
-		confirmPrompt:SetPoint(p.anchor, UIParent, "BOTTOMLEFT", p.x, p.y)
-	else
-		confirmPrompt:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
-	end
+	ns.RestorePopupPosition(confirmPrompt, "surveyConfirm", "CENTER", "CENTER", 0, 120)
 end
 
 local function createConfirmPrompt()
 	confirmPrompt = CreateFrame("Frame", "WRDungeonSurveyConfirm", UIParent, "BackdropTemplate")
 	tinsert(UISpecialFrames, "WRDungeonSurveyConfirm")
-	confirmPrompt:SetSize(280, 120)
+	confirmPrompt:SetSize(280, 172)
 	confirmPrompt:SetFrameStrata("DIALOG")
 	confirmPrompt:SetToplevel(true)
 	confirmPrompt:SetClampedToScreen(true)
 	confirmPrompt:SetScale(ns.GetSettings().uiScale)
-	confirmPrompt:SetMovable(true)
-	confirmPrompt:EnableMouse(true)
-	confirmPrompt:RegisterForDrag("LeftButton")
-	confirmPrompt:SetScript("OnDragStart", confirmPrompt.StartMoving)
-	confirmPrompt:SetScript("OnDragStop", function(self)
-		self:StopMovingOrSizing()
-		saveConfirmPosition()
-	end)
+	ns.MakePopupDraggable(confirmPrompt, "surveyConfirm")
 	confirmPrompt:SetScript("OnMouseDown", function() confirmPrompt:Raise() end)
 	confirmPrompt:SetBackdrop({
 		edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
@@ -596,26 +577,48 @@ local function createConfirmPrompt()
 	confirmPrompt.body:SetWordWrap(true)
 	confirmPrompt.body:SetText("Would you like to fill out the post-instance survey?")
 
-	-- deliberately NOT applied on the checkbox's own click: what "don't ask me again"
-	-- actually means depends on which button follows it. checked + Open Survey means
-	-- "always open it, stop asking"; checked + Skip means "stop asking AND stop
-	-- surveying", not "stop asking but keep forcing it open" (which skipConfirmation
-	-- alone, without also disabling survey.enabled, would otherwise do).
+	-- applied by either button: sets skipConfirmation, same as the Survey options tab's
+	-- "Skip the "fill out survey?" prompt" checkbox
 	confirmPrompt.skipCheck = CreateFrame("CheckButton", nil, confirmPrompt, "UICheckButtonTemplate")
 	confirmPrompt.skipCheck:SetSize(20, 20)
-	confirmPrompt.skipCheck:SetPoint("BOTTOMLEFT", 16, 44)
+	confirmPrompt.skipCheck:SetPoint("BOTTOMLEFT", 16, 68)
 
 	local skipLabel = confirmPrompt:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 	skipLabel:SetPoint("LEFT", confirmPrompt.skipCheck, "RIGHT", 2, 0)
 	skipLabel:SetText("Don't ask me again")
+
+	-- applied immediately, not on a button: turns the survey off (or back on) and
+	-- grays out what no longer applies while it's off
+	confirmPrompt.disableCheck = CreateFrame("CheckButton", nil, confirmPrompt, "UICheckButtonTemplate")
+	confirmPrompt.disableCheck:SetSize(20, 20)
+	confirmPrompt.disableCheck:SetPoint("BOTTOMLEFT", 16, 46)
+
+	local disableLabel = confirmPrompt:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	disableLabel:SetPoint("LEFT", confirmPrompt.disableCheck, "RIGHT", 2, 0)
+	disableLabel:SetText("Disable instance surveys")
+
+	-- display only; the setting itself is only written by the checkbox click below
+	confirmPrompt.showDisabled = function(disabled)
+		confirmPrompt.yesButton:SetEnabled(not disabled)
+		confirmPrompt.skipCheck:SetEnabled(not disabled)
+		skipLabel:SetAlpha(disabled and 0.4 or 1)
+	end
+	confirmPrompt.disableCheck:SetScript("OnClick", function(self)
+		local disabled = self:GetChecked() and true or false
+		ns.GetSettings().dungeonTracking.survey.enabled = not disabled
+		confirmPrompt.showDisabled(disabled)
+		if disabled then
+			ns.Print("Post-instance surveys disabled. Re-enable in Options -> Survey.")
+		end
+	end)
 
 	confirmPrompt.noButton = CreateFrame("Button", nil, confirmPrompt, "UIPanelButtonTemplate")
 	confirmPrompt.noButton:SetSize(90, 24)
 	confirmPrompt.noButton:SetPoint("BOTTOMLEFT", 16, 14)
 	confirmPrompt.noButton:SetText("Skip")
 	confirmPrompt.noButton:SetScript("OnClick", function()
-		if confirmPrompt.skipCheck:GetChecked() then
-			ns.GetSettings().dungeonTracking.survey.enabled = false
+		if confirmPrompt.skipCheck:GetChecked() and not confirmPrompt.disableCheck:GetChecked() then
+			ns.GetSettings().dungeonTracking.survey.skipConfirmation = true
 		end
 		confirmPrompt:Hide()
 	end)
@@ -649,10 +652,11 @@ function ns.ShowDungeonSurveyPrompt(memberList, zoneName)
 		createConfirmPrompt()
 	end
 	confirmMembers, confirmZoneName = memberList, zoneName
-	-- always starts unchecked: it's a one-shot "apply this choice" checkbox read by the
-	-- two buttons above, not a persistent reflection of a stored setting (if
-	-- skipConfirmation were ever true, this prompt wouldn't be showing at all)
+	-- both start unchecked: if skipConfirmation were on this prompt wouldn't show, and
+	-- if surveys were off it wouldn't either
 	confirmPrompt.skipCheck:SetChecked(false)
+	confirmPrompt.disableCheck:SetChecked(false)
+	confirmPrompt.showDisabled(false)
 	restoreConfirmPosition()
 	confirmPrompt:Show()
 end

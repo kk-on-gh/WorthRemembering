@@ -65,18 +65,14 @@ local function createPopup()
 	-- Lets Escape close this window, like Blizzard's own panels.
 	tinsert(UISpecialFrames, "WREditEntryPopup")
 	popup:SetSize(360, 380)
-	popup:SetPoint("CENTER")
 	popup:SetFrameStrata("DIALOG")
 	-- Toplevel so clicking this popup while Quick Add is also open brings it to the front
 	-- instead of whichever opened last/first always winning.
 	popup:SetToplevel(true)
 	popup:SetClampedToScreen(true)
 	popup:SetScale(ns.GetSettings().uiScale)
-	popup:SetMovable(true)
-	popup:EnableMouse(true)
-	popup:RegisterForDrag("LeftButton")
-	popup:SetScript("OnDragStart", popup.StartMoving)
-	popup:SetScript("OnDragStop", popup.StopMovingOrSizing)
+	ns.RestorePopupPosition(popup, "editEntry")
+	ns.MakePopupDraggable(popup, "editEntry")
 	popup:SetScript("OnMouseDown", function() popup:Raise() end)
 	popup:SetBackdrop({
 		edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",

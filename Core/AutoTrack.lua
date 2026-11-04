@@ -44,14 +44,24 @@ end
 -- lets NearbyWindow skip partied players (sound alert and list). computed live, not
 -- from partyGUIDs above, since that only updates on GROUP_ROSTER_UPDATE and would miss
 -- someone already partied before the first roster event (e.g. across a /reload)
+-- this gets asked once per nearby player on every nameplate change, so the roster's keys
+-- are cached: rebuilt on any roster change, and at most once a second otherwise (catches
+-- a member whose name hadn't resolved yet at the last rebuild)
+local partiedKeys, partiedKeysBuiltAt = nil, 0
+
 function ns.IsPlayerPartied(key)
-	for _, unit in ipairs(getCurrentPartyUnits()) do
-		local identity = ns.IdentifyUnit(unit)
-		if identity and identity.key == key then
-			return true
+	local now = GetTime()
+	if not partiedKeys or now - partiedKeysBuiltAt > 1 then
+		partiedKeys = {}
+		partiedKeysBuiltAt = now
+		for _, unit in ipairs(getCurrentPartyUnits()) do
+			local identity = ns.IdentifyUnit(unit)
+			if identity then
+				partiedKeys[identity.key] = true
+			end
 		end
 	end
-	return false
+	return partiedKeys[key] == true
 end
 
 local function logAuto(key, identity, unit, source, repGain, note)
@@ -103,6 +113,7 @@ local frame = CreateFrame("Frame")
 frame:RegisterEvent("GROUP_ROSTER_UPDATE")
 frame:SetScript("OnEvent", function(_, event)
 	if event == "GROUP_ROSTER_UPDATE" then
+		partiedKeys = nil
 		if pendingRosterUpdate then
 			pendingRosterUpdate:Cancel()
 		end
@@ -113,16 +124,7 @@ end)
 -- last log time per grouped player, session-only, independent of lastEmoteAt
 local lastQuestAt = {}
 
--- logs for every current party/raid member when you turn in a quest while grouped with
--- them. QUEST_TURNED_IN only tells us that you turned one in, not who else did, so this
--- can't tell whether they were actually along for that specific quest
-local function onQuestTurnedIn()
-	local settings = ns.GetSettings().autoTrack
-	local option = settings.quest
-	if not (settings.enabled and option.enabled) then
-		return
-	end
-
+local function logQuestForParty(option)
 	local units = getCurrentPartyUnits()
 	local cooldownSeconds = (option.cooldownMinutes or 30) * 60
 	local minGroupedSeconds = (option.minGroupedMinutes or 0) * 60
@@ -141,6 +143,21 @@ local function onQuestTurnedIn()
 			end
 		end
 	end
+end
+
+-- logs for every current party/raid member when you turn in a quest while grouped with
+-- them. QUEST_TURNED_IN only tells us that you turned one in, not who else did, so this
+-- can't tell whether they were actually along for that specific quest
+local function onQuestTurnedIn()
+	local settings = ns.GetSettings().autoTrack
+	local option = settings.quest
+	if not (settings.enabled and option.enabled) then
+		return
+	end
+
+	ns.RunEntryBatch(function()
+		logQuestForParty(option)
+	end)
 end
 
 local questFrame = CreateFrame("Frame")
@@ -330,6 +347,106 @@ auraFrame:SetScript("OnEvent", function(_, event, unit, info)
 	pcall(onPlayerAura, unit, info)
 end)
 
+-- duel results only come through as a CHAT_MSG_SYSTEM line built from these global
+-- strings (confirmed live). patterns are built from the strings themselves so they
+-- follow the client's locale. %1$s is the winner in both, %2$s the loser
+local function buildFormatPattern(fmt)
+	if type(fmt) ~= "string" then
+		return nil
+	end
+	local order, nextIndex = {}, 1
+	local tokenized = fmt:gsub("%%(%d)%$s", function(n)
+		order[#order + 1] = tonumber(n)
+		return "\001"
+	end)
+	tokenized = tokenized:gsub("%%s", function()
+		order[#order + 1] = nextIndex
+		nextIndex = nextIndex + 1
+		return "\001"
+	end)
+	local escaped = tokenized:gsub("[%%%^%$%(%)%.%[%]%*%+%-%?]", "%%%0")
+	return "^" .. escaped:gsub("\001", "(.+)") .. "$", order
+end
+
+local DUEL_PATTERNS = {}
+for _, fmt in ipairs({ DUEL_WINNER_KNOCKOUT, DUEL_WINNER_RETREAT }) do
+	local pattern, order = buildFormatPattern(fmt)
+	if pattern then
+		DUEL_PATTERNS[#DUEL_PATTERNS + 1] = { pattern = pattern, order = order }
+	end
+end
+
+-- your own name comes through bare (no realm/surname) when it matches yours
+local function isMyName(fullName)
+	local first, suffix = ns.SplitNameSuffix(fullName)
+	local myName, mySuffix = UnitName("player")
+	if first ~= myName then
+		return false
+	end
+	return not suffix or suffix == mySuffix or suffix == (GetNormalizedRealmName and GetNormalizedRealmName())
+end
+
+local lastDuelAt = {}
+
+local function onSystemMessage(msg)
+	if type(msg) ~= "string" or isSecretValue(msg) then
+		return
+	end
+
+	local winner, loser
+	for _, def in ipairs(DUEL_PATTERNS) do
+		local captures = { msg:match(def.pattern) }
+		if #captures == #def.order and #captures >= 2 then
+			local args = {}
+			for i, index in ipairs(def.order) do
+				args[index] = captures[i]
+			end
+			winner, loser = args[1], args[2]
+			break
+		end
+	end
+	if not winner or not loser then
+		return
+	end
+
+	local settings = ns.GetSettings().autoTrack
+	local option = settings.duel
+	if not (settings.enabled and option.enabled) then
+		return
+	end
+
+	local result, opponent
+	if isMyName(winner) then
+		result, opponent = option.victoryText or "", loser
+	elseif isMyName(loser) then
+		result, opponent = option.lossText or "", winner
+	else
+		return
+	end
+
+	local first, last = ns.SplitNameSuffix(opponent)
+	local identity, unit = ns.ResolveDisplayName(first, last)
+	local cooldownSeconds = (option.cooldownMinutes or 5) * 60
+	local now = time()
+	if lastDuelAt[identity.key] and (now - lastDuelAt[identity.key]) < cooldownSeconds then
+		return
+	end
+	lastDuelAt[identity.key] = now
+
+	local note = option.note and option.note:gsub("{{%s*(%a+)%s*}}", function(placeholder)
+		if placeholder:lower() == "duelresult" then
+			return result
+		end
+	end)
+	logAuto(identity.key, identity, unit, "auto-duel", option.repGain, note)
+end
+
+local systemFrame = CreateFrame("Frame")
+systemFrame:RegisterEvent("CHAT_MSG_SYSTEM")
+systemFrame:SetScript("OnEvent", function(_, _, msg)
+	pcall(onSystemMessage, msg)
+end)
+
 -- "completing" a dungeon/raid is approximated as leaving it, not a boss-kill event:
 -- classic doesn't expose a reliable encounter-complete signal across every instance, but
 -- everyone leaving together after a run is close enough. instanceID (from
@@ -354,7 +471,7 @@ local function snapshotPartyMembers()
 	return members
 end
 
-local function logDungeonForParty(members, instanceName, option)
+local function logDungeonEntries(members, instanceName, option)
 	for _, member in ipairs(members) do
 		ns.TouchIdentity(member.identity.key, member.identity)
 		-- member.context's own zone is whatever GetZoneText() said at snapshot time,
@@ -373,11 +490,21 @@ local function logDungeonForParty(members, instanceName, option)
 		end
 		ns.AddEntry(member.identity.key, member.identity, entry)
 	end
+end
+
+local function logDungeonForParty(members, instanceName, option)
+	ns.RunEntryBatch(function()
+		logDungeonEntries(members, instanceName, option)
+	end)
 	ns.RefreshAllTabs()
 end
 
 local function onInstanceTransition()
+	-- auto-log follows the auto-add master switch, the survey (manual) doesn't. instance
+	-- tracking itself keeps running so re-enabling mid-run doesn't misread the next exit
 	local settings = ns.GetSettings().dungeonTracking
+	local autoLogEnabled = ns.GetSettings().autoTrack.enabled and settings.autoLog.enabled
+	local surveyEnabled = settings.survey.enabled
 	local inInstance, instanceType = IsInInstance()
 
 	if inInstance and (instanceType == "party" or instanceType == "raid") then
@@ -387,7 +514,7 @@ local function onInstanceTransition()
 			currentInstanceName = name
 			dungeonStartLogged = false
 		end
-		if settings.autoLog.enabled and not settings.autoLog.onlyOnCompletion and not dungeonStartLogged then
+		if autoLogEnabled and not settings.autoLog.onlyOnCompletion and not dungeonStartLogged then
 			dungeonStartLogged = true
 			logDungeonForParty(snapshotPartyMembers(), currentInstanceName, settings.autoLog)
 		end
@@ -399,13 +526,13 @@ local function onInstanceTransition()
 
 		-- snapshotted once, used by whichever of the two features (both, either, or
 		-- neither) is actually enabled, rather than re-deriving it per feature
-		local needMembers = (settings.autoLog.enabled and settings.autoLog.onlyOnCompletion) or settings.survey.enabled
+		local needMembers = (autoLogEnabled and settings.autoLog.onlyOnCompletion) or surveyEnabled
 		local members = needMembers and snapshotPartyMembers() or nil
 
-		if settings.autoLog.enabled and settings.autoLog.onlyOnCompletion then
+		if autoLogEnabled and settings.autoLog.onlyOnCompletion then
 			logDungeonForParty(members, currentInstanceName, settings.autoLog)
 		end
-		if settings.survey.enabled and members and #members > 0 and ns.ShowDungeonSurveyPrompt then
+		if surveyEnabled and members and #members > 0 and ns.ShowDungeonSurveyPrompt then
 			ns.ShowDungeonSurveyPrompt(members, currentInstanceName)
 		end
 

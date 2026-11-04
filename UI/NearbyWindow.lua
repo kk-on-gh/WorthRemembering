@@ -5,17 +5,33 @@ local scroll
 local scrollChild
 local rowPool = {}
 
-local WINDOW_WIDTH = 220
+local WINDOW_WIDTH = 200
 local ROW_HEIGHT = 20
 local HEADER_HEIGHT = 28
 local SCROLLBAR_GUTTER = 22
-local MIN_WIDTH, MIN_HEIGHT = 140, HEADER_HEIGHT + ROW_HEIGHT + 10
-local DOUBLE_CLICK_WINDOW = 0.4
+local MIN_WIDTH, MIN_HEIGHT = 125, 55
 
 -- In static-size mode the frame can be resized, so row/scroll widths are derived from the
--- frame's *current* width rather than the fixed WINDOW_WIDTH constant.
-local function rowAreaWidth()
-	return (frame and frame:GetWidth() or WINDOW_WIDTH) - 16 - SCROLLBAR_GUTTER
+-- frame's *current* width rather than the fixed WINDOW_WIDTH constant. The scrollbar
+-- gutter is only reserved when the scrollbar's actually showing (see layoutRowArea),
+-- rather than always, so a short list isn't needlessly squeezed for arrows it never uses.
+local function rowAreaWidth(withScrollbar)
+	local width = (frame and frame:GetWidth() or WINDOW_WIDTH) - 16
+	return withScrollbar and (width - SCROLLBAR_GUTTER) or width
+end
+
+-- whether the row list actually overflows its visible area, static-size and
+-- auto-grow modes computed differently since only static mode has a fixed frame height
+-- to overflow against; auto-grow instead caps visible rows at nearbyVisibleRowLimit.
+local function needsScrollbar(playerCount)
+	if ns.GetSettings().nearbyStaticSize then
+		if not frame then
+			return false
+		end
+		local visibleHeight = math.max(frame:GetHeight() - HEADER_HEIGHT - 16, ROW_HEIGHT)
+		return (math.max(playerCount or 0, 1) * ROW_HEIGHT) > visibleHeight + 0.5
+	end
+	return (playerCount or 0) > (ns.GetSettings().nearbyVisibleRowLimit or 0)
 end
 
 -- separate from the main window's alpha. this window idles dim and only brightens on
@@ -97,7 +113,8 @@ local function applyGrowDirectionLayout()
 
 	if direction == "up" then
 		frame.title:SetPoint("BOTTOMLEFT", 8, 6)
-		frame.closeButton:SetPoint("BOTTOMRIGHT", -2, 2)
+		frame.title:SetPoint("RIGHT", frame.closeButton, "LEFT", -4, 0)
+		frame.closeButton:SetPoint("BOTTOMRIGHT", -4, 4)
 		frame.divider:SetPoint("BOTTOMLEFT", 6, HEADER_HEIGHT - 2)
 		frame.divider:SetPoint("BOTTOMRIGHT", -6, HEADER_HEIGHT - 2)
 		frame.emptyText:SetPoint("BOTTOMLEFT", 8, HEADER_HEIGHT + 2)
@@ -107,7 +124,8 @@ local function applyGrowDirectionLayout()
 		end
 	else
 		frame.title:SetPoint("TOPLEFT", 8, -6)
-		frame.closeButton:SetPoint("TOPRIGHT", -2, -2)
+		frame.title:SetPoint("RIGHT", frame.closeButton, "LEFT", -4, 0)
+		frame.closeButton:SetPoint("TOPRIGHT", -4, -4)
 		frame.divider:SetPoint("TOPLEFT", 6, -(HEADER_HEIGHT - 2))
 		frame.divider:SetPoint("TOPRIGHT", -6, -(HEADER_HEIGHT - 2))
 		frame.emptyText:SetPoint("TOPLEFT", 8, -(HEADER_HEIGHT + 2))
@@ -144,6 +162,15 @@ function ns.SetNearbyScale(value)
 	ns.GetSettings().nearbyScale = value
 	if frame then
 		frame:SetScale(value)
+	end
+end
+
+-- what a row click does, per Options > General > Nearby Window
+local function performRowAction(action, key)
+	if action == "details" then
+		ns.ShowPlayerDetails(key)
+	elseif action == "quickadd" then
+		ns.ShowQuickAdd(key)
 	end
 end
 
@@ -226,21 +253,41 @@ end
 
 -- resizes the row/scroll area to the frame's current size. shared by refresh() and the
 -- live OnSizeChanged handler, so drag-resizing reflows rows immediately
+-- Blizzard's scrollbar puts its up/down arrows 16px past each end of the track, so it
+-- needs about this much height to fit both arrows plus its thumb. any shorter and the
+-- bar folds over itself, poking its up arrow into the header
+local SCROLLBAR_MIN_AREA_HEIGHT = 56
+-- whether layoutRowArea currently wants the scrollbar visible; see the OnShow hook in
+-- createFrame, which stops Blizzard's template from re-showing it on its own
+local scrollbarWanted = false
+
 local function layoutRowArea(playerCount)
-	local width = rowAreaWidth()
+	local areaHeight, visibleRows
+	if ns.GetSettings().nearbyStaticSize then
+		areaHeight = math.max(frame:GetHeight() - HEADER_HEIGHT - 16, ROW_HEIGHT)
+	else
+		local limit = ns.GetSettings().nearbyVisibleRowLimit
+		visibleRows = math.max(math.min(playerCount or 0, limit), 1)
+		areaHeight = visibleRows * ROW_HEIGHT
+	end
+
+	-- too short for a full scrollbar: hide it (the mouse wheel still scrolls) rather than
+	-- let it overlap the header
+	local showScrollbar = needsScrollbar(playerCount) and areaHeight >= SCROLLBAR_MIN_AREA_HEIGHT
+	scrollbarWanted = showScrollbar
+	if scroll.ScrollBar then
+		scroll.ScrollBar:SetShown(showScrollbar)
+	end
+	local width = rowAreaWidth(showScrollbar)
 	for i = 1, #rowPool do
 		local row = rowPool[i]
 		row:SetWidth(width)
 		row.name:SetWidth(width - 44)
 	end
 
-	if ns.GetSettings().nearbyStaticSize then
-		scroll:SetSize(width, math.max(frame:GetHeight() - HEADER_HEIGHT - 16, ROW_HEIGHT))
-	else
-		local limit = ns.GetSettings().nearbyVisibleRowLimit
-		local visibleRows = math.max(math.min(playerCount or 0, limit), 1)
-		scroll:SetSize(width, visibleRows * ROW_HEIGHT)
-		frame:SetHeight(HEADER_HEIGHT + visibleRows * ROW_HEIGHT + 16)
+	scroll:SetSize(width, areaHeight)
+	if visibleRows then
+		frame:SetHeight(HEADER_HEIGHT + areaHeight + 16)
 	end
 	scrollChild:SetSize(width, math.max(playerCount or 0, 1) * ROW_HEIGHT)
 end
@@ -302,23 +349,31 @@ local function refresh()
 				return
 			end
 
-			-- single-click's own Add Entry popup is delayed by DOUBLE_CLICK_WINDOW rather
-			-- than firing immediately: there's no way to know a second click is coming
-			-- until it either does or doesn't, so the only way to avoid both actions
-			-- firing on a double-click is to hold off the first one and cancel it if a
-			-- second click on the same row lands in time
+			local settings = ns.GetSettings()
+			local singleAction = settings.nearbySingleClick or "quickadd"
+			local doubleAction = settings.nearbyDoubleClick or "details"
+
+			-- the single-click action is delayed by nearbyDoubleClickMs rather than
+			-- firing immediately: there's no way to know a second click is coming until
+			-- it either does or doesn't, so the only way to avoid both actions firing on a
+			-- double-click is to hold off the first one and cancel it if a second click on
+			-- the same row lands in time. with no double-click action there's nothing to
+			-- wait for, so it fires right away
 			if row.pendingClickTimer and row.pendingClickKey == key then
 				row.pendingClickTimer:Cancel()
 				row.pendingClickTimer = nil
-				ns.ShowPlayerDetails(key)
+				performRowAction(doubleAction, key)
+			elseif doubleAction == "nothing" then
+				performRowAction(singleAction, key)
 			else
 				if row.pendingClickTimer then
 					row.pendingClickTimer:Cancel()
 				end
 				row.pendingClickKey = key
-				row.pendingClickTimer = C_Timer.NewTimer(DOUBLE_CLICK_WINDOW, function()
+				local window = (settings.nearbyDoubleClickMs or 300) / 1000
+				row.pendingClickTimer = C_Timer.NewTimer(window, function()
 					row.pendingClickTimer = nil
-					ns.ShowQuickAdd(key)
+					performRowAction(singleAction, key)
 				end)
 			end
 		end)
@@ -330,6 +385,8 @@ local function refresh()
 	end
 
 	layoutRowArea(#players)
+	-- the count shows how many are listed even when the window's too short to show them all
+	frame.title:SetText("WR - Nearby (" .. #players .. ")")
 end
 ns.RefreshNearbyWindow = refresh
 
@@ -350,20 +407,49 @@ function ns.SetNearbyStaticSize(enabled)
 	end
 	frame:SetResizable(enabled and true or false)
 	frame.resizeGrip:SetShown(enabled)
+	local settings = ns.GetSettings()
 	if enabled then
-		local settings = ns.GetSettings()
-		frame:SetSize(settings.nearbyStaticWidth or WINDOW_WIDTH, settings.nearbyStaticHeight or 160)
+		frame:SetSize(settings.nearbyStaticWidth or WINDOW_WIDTH, settings.nearbyStaticHeight or 125)
+	else
+		frame:SetWidth(settings.nearbyStaticWidth or WINDOW_WIDTH)
 	end
 	refresh()
+end
+
+-- the width applies in both modes; the height only in static mode (auto-size mode sets
+-- its own height from the player count)
+ns.NEARBY_MIN_WIDTH, ns.NEARBY_MIN_HEIGHT = MIN_WIDTH, MIN_HEIGHT
+
+function ns.SetNearbyWindowSize(width, height)
+	local settings = ns.GetSettings()
+	if width then
+		settings.nearbyStaticWidth = math.max(MIN_WIDTH, width)
+	end
+	if height and settings.nearbyStaticSize then
+		settings.nearbyStaticHeight = math.max(MIN_HEIGHT, height)
+	end
+	if not frame then
+		return
+	end
+	frame:SetWidth(settings.nearbyStaticWidth or WINDOW_WIDTH)
+	if settings.nearbyStaticSize then
+		frame:SetHeight(settings.nearbyStaticHeight or 125)
+	end
+	refresh()
+end
+
+function ns.GetNearbyWindowSize()
+	local settings = ns.GetSettings()
+	return settings.nearbyStaticWidth or WINDOW_WIDTH, settings.nearbyStaticHeight or 125
 end
 
 local function createFrame()
 	local settings = ns.GetSettings()
 	frame = CreateFrame("Frame", "WRNearbyFrame", UIParent, "BackdropTemplate")
 	if settings.nearbyStaticSize then
-		frame:SetSize(settings.nearbyStaticWidth or WINDOW_WIDTH, settings.nearbyStaticHeight or 160)
+		frame:SetSize(settings.nearbyStaticWidth or WINDOW_WIDTH, settings.nearbyStaticHeight or 125)
 	else
-		frame:SetSize(WINDOW_WIDTH, HEADER_HEIGHT + ROW_HEIGHT + 16)
+		frame:SetSize(settings.nearbyStaticWidth or WINDOW_WIDTH, HEADER_HEIGHT + ROW_HEIGHT + 16)
 	end
 	frame:SetClampedToScreen(true)
 	frame:SetFrameStrata("LOW")
@@ -402,6 +488,13 @@ local function createFrame()
 	local resizeStartX, resizeStartY, resizeStartWidth, resizeStartHeight
 
 	frame.resizeGrip:SetScript("OnMouseDown", function()
+		-- pin to a single fixed anchor before resizing, same as the main window's grip
+		local anchor = ns.GetSettings().nearbyGrowDirection == "up" and "BOTTOMLEFT" or "TOPLEFT"
+		local x0 = frame:GetLeft()
+		local y0 = anchor == "BOTTOMLEFT" and frame:GetBottom() or frame:GetTop()
+		frame:ClearAllPoints()
+		frame:SetPoint(anchor, UIParent, "BOTTOMLEFT", x0, y0)
+
 		resizing = true
 		local scale = frame:GetEffectiveScale()
 		local x, y = GetCursorPosition()
@@ -424,6 +517,10 @@ local function createFrame()
 			newHeight = math.max(MIN_HEIGHT, resizeStartHeight - dy)
 		end
 		frame:SetSize(newWidth, newHeight)
+		-- keeps the Options width/height sliders following the drag
+		if ns.OnNearbyWindowResized then
+			ns.OnNearbyWindowResized(newWidth, newHeight)
+		end
 	end)
 	frame.resizeGrip:SetScript("OnMouseUp", function()
 		resizing = false
@@ -435,7 +532,8 @@ local function createFrame()
 	frame.resizeGrip:SetShown(settings.nearbyStaticSize)
 
 	frame.title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-	frame.title:SetText("Worth Remembering - Nearby")
+	frame.title:SetText("WR - Nearby")
+	frame.title:SetWordWrap(false)
 
 	frame.closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
 	frame.closeButton:SetSize(16, 16)
@@ -481,6 +579,17 @@ local function createFrame()
 	frame.flashAnim:SetScript("OnFinished", function() frame.flashOverlay:Hide() end)
 
 	scroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
+
+	ns.SetGentleScroll(scroll)
+	-- the template re-shows its scrollbar whenever the scroll range changes, which would
+	-- undo layoutRowArea hiding it
+	if scroll.ScrollBar then
+		scroll.ScrollBar:HookScript("OnShow", function(self)
+			if not scrollbarWanted then
+				self:Hide()
+			end
+		end)
+	end
 	scrollChild = CreateFrame("Frame", nil, scroll)
 	scroll:SetScrollChild(scrollChild)
 	scrollChild:SetSize(rowAreaWidth(), ROW_HEIGHT)
