@@ -163,6 +163,10 @@ Auto-Track
 
 ![image](https://cdn.jsdelivr.net/gh/kk-on-gh/WorthRemembering-Media@master/Screenshots/options-autotrack.png)
 
+Survey
+
+![image](https://cdn.jsdelivr.net/gh/kk-on-gh/WorthRemembering-Media@master/Screenshots/options-survey.png)
+
 Alerts
 
 ![image](https://cdn.jsdelivr.net/gh/kk-on-gh/WorthRemembering-Media@master/Screenshots/options-alerts.png)
