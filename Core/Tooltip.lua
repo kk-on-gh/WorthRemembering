@@ -4,6 +4,30 @@ if not (TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall) then
 	return
 end
 
+local FEATURED_MAX_CHARS = 120
+
+-- the post-call reruns on every tooltip refresh, so the featured pick is held per
+-- tooltip until it hides or shows a different player
+local featuredPick = {}
+
+local function clearPick(tooltip)
+	featuredPick[tooltip] = nil
+end
+GameTooltip:HookScript("OnHide", clearPick)
+ItemRefTooltip:HookScript("OnHide", clearPick)
+
+-- byte cut backed off to a UTF-8 lead byte so a multibyte char never gets split
+local function truncate(text, maxChars)
+	if #text <= maxChars then
+		return text
+	end
+	local cut = maxChars
+	while cut > 1 and text:byte(cut + 1) and text:byte(cut + 1) >= 0x80 and text:byte(cut + 1) < 0xC0 do
+		cut = cut - 1
+	end
+	return text:sub(1, cut) .. "..."
+end
+
 TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip)
 	if tooltip ~= GameTooltip and tooltip ~= ItemRefTooltip then
 		return
@@ -45,10 +69,19 @@ TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tool
 		local bracket = ns.GetBracket(standing)
 		lines[#lines + 1] = { bracket.name, unpack(bracket.color) }
 	end
-	if content.lastNote then
-		local lastEntry = record.entries[#record.entries]
-		if lastEntry and lastEntry.text and lastEntry.text ~= "" then
-			lines[#lines + 1] = { lastEntry.text, 0.8, 0.8, 0.8 }
+	local lastEntry = record.entries[#record.entries]
+	local lastNoteShown = content.lastNote and lastEntry and lastEntry.text and lastEntry.text ~= ""
+	if lastNoteShown then
+		lines[#lines + 1] = { lastEntry.text, 0.8, 0.8, 0.8 }
+	end
+	if content.featuredNote then
+		local pick = featuredPick[tooltip]
+		if not pick or pick.key ~= identity.key then
+			pick = { key = identity.key, entry = ns.PickFeaturedEntry(record, lastNoteShown and lastEntry or nil) }
+			featuredPick[tooltip] = pick
+		end
+		if pick.entry then
+			lines[#lines + 1] = { "\"" .. truncate(pick.entry.text, FEATURED_MAX_CHARS) .. "\"", 0.75, 0.75, 0.75 }
 		end
 	end
 	if content.timesSeen then

@@ -747,6 +747,7 @@ local TOOLTIP_CONTENT_OPTIONS = {
 	{ value = "rating", text = "Rating" },
 	{ value = "bracket", text = "Bracket" },
 	{ value = "lastNote", text = "Last Note" },
+	{ value = "featuredNote", text = "Featured Note" },
 	{ value = "timesSeen", text = "Times Seen" },
 	{ value = "noteCount", text = "Note Count" },
 }
@@ -1759,6 +1760,7 @@ local function buildAutoTrackRow(box, def, option, rowY)
 		cooldownBox:SetPoint("LEFT", cooldownLabel, "RIGHT", 6, 0)
 		bindMinutesBox(cooldownBox, option, "cooldownMinutes")
 		setTooltip(cooldownBox, "Minutes before this can log again for the same player.")
+		detailRow.cooldownBox = cooldownBox
 	end
 
 	if def.hasMinGrouped then
@@ -1797,6 +1799,7 @@ local function buildAutoTrackRow(box, def, option, rowY)
 	end
 
 	setContainerEnabled(detailRow, option.enabled)
+	return check, detailRow
 end
 
 -- session-only: reset on every fresh Options open, not persisted to settings
@@ -1829,29 +1832,86 @@ local function buildAutoTrackRowsBox(parent, y, title, defs, expanded, onClick)
 end
 
 local function buildAutoTrackGeneralBox(parent, y, onToggle)
-	local defs = {}
-	for _, def in ipairs(ns.AUTO_TRACK_DEFS) do
-		if not def.isEmote then
-			defs[#defs + 1] = def
-		end
-	end
-	return buildAutoTrackRowsBox(parent, y, "General", defs, autoTrackGeneralExpanded, function()
+	return buildAutoTrackRowsBox(parent, y, "General", ns.AUTO_TRACK_DEFS, autoTrackGeneralExpanded, function()
 		autoTrackGeneralExpanded = not autoTrackGeneralExpanded
 		onToggle()
 	end)
 end
 
+local EMOTE_RULE_DEF = { label = "", hasCooldown = true }
+-- extra space between a rule's Match line and its Rep gain/Note line
+local EMOTE_RULE_LINE_GAP = 5
+local EMOTE_RULE_HEIGHT = autoTrackRowHeight(EMOTE_RULE_DEF) + EMOTE_RULE_LINE_GAP
+
+-- user-editable list of autoTrack.emoteRules, each a match phrase plus the usual
+-- rep/note/cooldown row
 local function buildAutoTrackEmotesBox(parent, y, onToggle)
-	local defs = {}
-	for _, def in ipairs(ns.AUTO_TRACK_DEFS) do
-		if def.isEmote then
-			defs[#defs + 1] = def
-		end
+	local rules = ns.GetSettings().autoTrack.emoteRules
+
+	local height = COLLAPSED_HEIGHT
+	if autoTrackEmotesExpanded then
+		height = height + #rules * EMOTE_RULE_HEIGHT + 28
 	end
-	return buildAutoTrackRowsBox(parent, y, "Directed Emotes", defs, autoTrackEmotesExpanded, function()
+
+	local box, titleText = createSectionBox(parent, y, height, "Directed Emotes")
+	createDisclosure(box, autoTrackEmotesExpanded, function()
 		autoTrackEmotesExpanded = not autoTrackEmotesExpanded
 		onToggle()
 	end)
+	setTooltip(titleText, "Logged when another player's emote in your chat contains a phrase you choose, e.g. \"salute\" or \"cheers at you\". Add one rule per emote you care about.")
+
+	if not autoTrackEmotesExpanded then
+		return y - height - 6
+	end
+
+	local rowY = -COLLAPSED_HEIGHT
+	for i, rule in ipairs(rules) do
+		local check, detailRow = buildAutoTrackRow(box, EMOTE_RULE_DEF, rule, rowY)
+		detailRow:SetPoint("TOPLEFT", 44, rowY - 24 - EMOTE_RULE_LINE_GAP)
+
+		local matchLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		matchLabel:SetPoint("LEFT", check, "RIGHT", 4, 0)
+		matchLabel:SetText("Match")
+
+		local matchBox = ns.CreateSmallEditBox(box, 120, 16)
+		matchBox:SetJustifyH("LEFT")
+		matchBox:SetPoint("LEFT", matchLabel, "RIGHT", 6, 0)
+		bindTextBox(matchBox, rule, "match")
+		setTooltip(matchBox, "Logs when another player's emote contains this text (not case-sensitive), e.g. \"wave\" or \"salutes you\". It matches the emote as your chat shows it, so use your game language's wording.")
+
+		local youCheck = buildCheckbox(box, 0, 0, "Must say \"you\"", rule.requireYou,
+			function(checked) rule.requireYou = checked end)
+		youCheck:ClearAllPoints()
+		youCheck:SetPoint("LEFT", matchBox, "RIGHT", 12, 0)
+		setTooltip(youCheck, "Only counts emotes aimed at you (\"waves at you.\"), not ones aimed at nobody (\"waves.\"). Turn off if your game language doesn't use the word \"you\".")
+
+		local deleteButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+		deleteButton:SetSize(22, 18)
+		deleteButton:SetText("X")
+		deleteButton:SetPoint("LEFT", detailRow.cooldownBox, "RIGHT", 12, 0)
+		setTooltip(deleteButton, "Remove this rule.")
+		deleteButton:SetScript("OnClick", function()
+			table.remove(rules, i)
+			onToggle()
+		end)
+
+		rowY = rowY - EMOTE_RULE_HEIGHT
+	end
+
+	local addButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+	addButton:SetSize(100, 20)
+	addButton:SetText("+ Add Emote")
+	addButton:SetPoint("TOPLEFT", 8, rowY - 2)
+	addButton:SetScript("OnClick", function()
+		table.insert(rules, { match = "", requireYou = true, enabled = true, repGain = 1, note = "", cooldownMinutes = 5 })
+		onToggle()
+	end)
+	if #rules >= ns.MAX_EMOTE_RULES then
+		addButton:Disable()
+		setTooltip(addButton, "Up to " .. ns.MAX_EMOTE_RULES .. " emote rules.")
+	end
+
+	return y - height - 6
 end
 
 -- session-only: collapsed on every fresh Options open, same as autoTrackEmotesExpanded
@@ -2234,7 +2294,7 @@ local function buildRecentAlliesBox(parent, y, onToggle)
 end
 
 local function buildNearbyAutoAddBox(parent, y)
-	local height = 98
+	local height = 122
 	local box = createSectionBox(parent, y, height, "Nearby Players")
 	local autoAdd = ns.GetSettings().autoAddNearby
 
@@ -2251,9 +2311,16 @@ local function buildNearbyAutoAddBox(parent, y)
 		function(checked) autoAdd.alsoWhileResting = checked end)
 	setTooltip(restCheck, "FOR TESTING PURPOSES ONLY. This will have a MAJOR impact on performance if in a large city.")
 
+	local mouseoverCheck = buildCheckbox(box, 8, -92, "Require a mouseover",
+		autoAdd.requireMouseover,
+		function(checked) autoAdd.requireMouseover = checked end)
+	setTooltip(mouseoverCheck, "Only auto-add players you mouse over (in the world, their nameplate, or a unit frame), instead of every nameplated player.")
+
 	local function setRestCheckEnabled(enabled)
 		setContainerEnabled(restCheck, enabled)
 		setContainerEnabled(restCheck.label, enabled)
+		setContainerEnabled(mouseoverCheck, enabled)
+		setContainerEnabled(mouseoverCheck.label, enabled)
 	end
 
 	local addCheck = buildCheckbox(box, 8, -44, "Auto-add missing nearby players (added with 0 standing)",

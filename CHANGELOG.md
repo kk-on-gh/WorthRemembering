@@ -2,6 +2,17 @@
 
 All notable changes to Worth Remembering are documented here.
 
+## [1.0.1] - 2026-11-10
+
+### Added
+- Directed Emotes (Options > Auto-Track) are now your own list of rules instead of a fixed Wave/Thank/Bow: each rule logs when another player's emote contains a phrase you choose (e.g. "salute" or "cheers at you"), with its own rep gain, note, and cooldown. Add up to 20, remove any. A "Must say 'you'" checkbox per rule (on by default) skips emotes not aimed at you; turn it off for game languages that don't use the word "you". Your existing Wave/Thank/Bow settings carry over as the first three rules.
+- New "Require a mouseover" option for auto-adding nearby players (Options > Auto-Track > Nearby Players): when checked, only players you mouse over get auto-added, instead of every player whose nameplate shows up.
+- New "Featured Note" choice for the tooltip (Options > General > Tooltip & Context Menu, off by default): shows one of the player's featured notes at random, in quotes, like the quote on the Details tab. It picks once each time the tooltip appears, so it doesn't flicker between notes while you hover. Long notes are cut short, and with Last Note also on, it won't repeat the same note twice.
+
+### Fixed
+- Right-clicking the minimap icon opened its menu, but none of the menu's options did anything when the icon had been collected into a minimap button bag (like EllesmereUI's).
+- Whispering a notable player from their name in chat (right-click > Whisper, or clicking the name) put their standing tag, like "[+2]", into the whisper target, so the whisper failed. The tag now only changes the name you see.
+
 ## [1.0] - 2026-11-04
 
 This is a huge update! There are bound to be bugs, please don't hesitate to report them! Discord, email, curseforge comments, and github issues all work to get in touch with me.

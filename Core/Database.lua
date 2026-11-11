@@ -107,6 +107,31 @@ local function migrate(savedDb)
 		end
 	end
 
+	if from < 8 then
+		-- v8: wave/thank/bow become the first entries of the user-editable emoteRules
+		-- list, keeping each one's enabled/rep/note/cooldown
+		local autoTrack = savedDb.settings and savedDb.settings.autoTrack
+		if autoTrack then
+			if autoTrack.emoteRules == nil and (autoTrack.wave or autoTrack.thank or autoTrack.bow) then
+				local rules = {}
+				for _, default in ipairs(ns.Defaults.settings.autoTrack.emoteRules) do
+					local rule = deepCopy(default)
+					local old = autoTrack[rule.match]
+					if old then
+						for _, field in ipairs({ "enabled", "repGain", "note", "cooldownMinutes" }) do
+							if old[field] ~= nil then
+								rule[field] = old[field]
+							end
+						end
+					end
+					rules[#rules + 1] = rule
+				end
+				autoTrack.emoteRules = rules
+			end
+			autoTrack.wave, autoTrack.thank, autoTrack.bow = nil, nil, nil
+		end
+	end
+
 	savedDb.schemaVersion = ns.CURRENT_SCHEMA_VERSION
 end
 
@@ -529,6 +554,17 @@ function ns.IsNotable(record)
 	end
 	local band = ns.GetSettings().neutralBand
 	return math.abs(record.standing or 0) > band
+end
+
+-- random featured entry with note text, or nil. `exclude` drops one entry from the pool
+function ns.PickFeaturedEntry(record, exclude)
+	local candidates = {}
+	for _, entry in ipairs(record.entries) do
+		if entry.featured and entry ~= exclude and entry.text and entry.text ~= "" then
+			candidates[#candidates + 1] = entry
+		end
+	end
+	return candidates[1] and candidates[math.random(#candidates)] or nil
 end
 
 -- broader than ns.IsNotable: true for any history at all, including bare auto-nearby

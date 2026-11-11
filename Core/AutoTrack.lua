@@ -193,51 +193,49 @@ end)
 -- CHAT_MSG_TEXT_EMOTE for custom /e text. confirmed live: wave/thank/bow come through
 -- CHAT_MSG_TEXT_EMOTE instead. no "directed at you" flag either way, just
 -- rendered text: "<name> waves at you." vs "<name> waves." registered on both events in
--- case something else uses the standard channel
-local DIRECTED_EMOTE_DEFS = {
-	{ key = "wave", keyword = "wave" },
-	{ key = "thank", keyword = "thank" },
-	{ key = "bow", keyword = "bow" },
-}
+-- case something else uses the standard channel. matched against autoTrack.emoteRules
 
--- last log time per player, session-only, keyed separately per emote type: waving then
--- thanking the same player logs both, each on its own cooldown
-local lastEmoteAt = {}
+-- last log time per rule per player, session-only: waving then thanking the same player
+-- logs both, each on its own rule's cooldown. weak keys so deleted rules drop out
+local lastEmoteAt = setmetatable({}, { __mode = "k" })
 
 local function onChatEmote(text, playerName, guid)
 	if not text or not playerName or playerName == "" then
 		return
 	end
-	-- a self-performed emote comes through with a blank playerName on this server
+	-- a self-performed emote comes through with a blank playerName on Forever
 	-- (confirmed live), not your own name, so the name check below never catches it.
 	-- guid does identify you correctly, so check that too.
 	if playerName == ns.GetMyFullName() or (guid and guid == UnitGUID("player")) then
 		return
 	end
 
-	-- matches "you" as a whole word anywhere, not just the end, since "at you" phrasing
-	-- varies. free-form /e text also routes through this event, so a custom emote with
-	-- both a keyword and "you" could rarely false-positive. acceptable for now
-	local lower = text:lower()
-	if not lower:match("%f[%a]you%f[%A]") then
+	local settings = ns.GetSettings().autoTrack
+	if not settings.enabled or not settings.emoteRules then
 		return
 	end
 
-	for _, def in ipairs(DIRECTED_EMOTE_DEFS) do
-		if lower:find(def.keyword, 1, true) then
-			local settings = ns.GetSettings().autoTrack
-			local option = settings[def.key]
-			if settings.enabled and option.enabled then
-				local first, last = ns.SplitNameSuffix(playerName)
-				local identity, unit = ns.ResolveDisplayName(first, last)
-				local cooldownSeconds = (option.cooldownMinutes or 5) * 60
-				local now = time()
-				local trackKey = def.key .. ":" .. identity.key
-				local lastLoggedAt = lastEmoteAt[trackKey]
-				if not lastLoggedAt or (now - lastLoggedAt) >= cooldownSeconds then
-					lastEmoteAt[trackKey] = now
-					logAuto(identity.key, identity, unit, "auto-" .. def.key, option.repGain, option.note)
-				end
+	-- "you" as a whole word anywhere, since "at you" phrasing varies. free-form /e text
+	-- also routes through this event, so a custom emote can rarely false-positive
+	local lower = text:lower()
+	local saysYou = lower:match("%f[%a]you%f[%A]") ~= nil
+
+	for _, rule in ipairs(settings.emoteRules) do
+		local match = rule.match and rule.match:lower()
+		if rule.enabled and match and match ~= "" and (saysYou or not rule.requireYou)
+			and lower:find(match, 1, true) then
+			local first, last = ns.SplitNameSuffix(playerName)
+			local identity, unit = ns.ResolveDisplayName(first, last)
+			local perPlayer = lastEmoteAt[rule]
+			if not perPlayer then
+				perPlayer = {}
+				lastEmoteAt[rule] = perPlayer
+			end
+			local now = time()
+			local lastLoggedAt = perPlayer[identity.key]
+			if not lastLoggedAt or (now - lastLoggedAt) >= (rule.cooldownMinutes or 5) * 60 then
+				perPlayer[identity.key] = now
+				logAuto(identity.key, identity, unit, "auto-emote", rule.repGain, rule.note)
 			end
 			return
 		end

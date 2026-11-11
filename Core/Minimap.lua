@@ -40,8 +40,10 @@ local function showTooltip(self)
 	GameTooltip:Show()
 end
 
-local function showMenu(self)
-	MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+-- owned by UIParent, not the button: minimap button collectors can hide the button on
+-- the press that clicks a menu item, which would close the menu before the click lands
+local function showMenu()
+	MenuUtil.CreateContextMenu(UIParent, function(_, rootDescription)
 		rootDescription:CreateTitle("Worth Remembering")
 		rootDescription:CreateButton("Open Window", function() ns.ShowOverview() end)
 		rootDescription:CreateButton("Options", function() ns.SelectOptionsTab() end)

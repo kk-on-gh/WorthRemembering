@@ -149,6 +149,26 @@ local function refresh()
 	C_Timer.After(0, refreshNow)
 end
 
+-- off by default: logs one bare entry the first time a never-seen player shows up
+-- nearby, so they're searchable later. only fires once since it checks for an
+-- existing record first
+local function tryAutoAdd(unit, identity)
+	local autoAdd = ns.GetSettings().autoAddNearby
+	if not (ns.GetSettings().autoTrack.enabled and autoAdd.enabled and (autoAdd.alsoWhileResting or not IsResting())) then
+		return
+	end
+	if ns.GetPlayerRecord(identity.key, false) then
+		return
+	end
+	local entry = ns.CaptureContext(unit)
+	entry.source = "auto-nearby"
+	ns.AddEntry(identity.key, identity, entry)
+	if ns.RefreshAllTabs then
+		ns.RefreshAllTabs()
+	end
+	refresh()
+end
+
 local function updateUnit(unit)
 	local identity = ns.IdentifyUnit(unit)
 	visibleUnits[unit] = identity
@@ -168,21 +188,8 @@ local function updateUnit(unit)
 		end
 	end
 
-	-- off by default: logs one bare entry the first time a never-seen player shows up
-	-- nearby, so they're searchable later. only fires once since it checks for an
-	-- existing record first
-	if identity then
-		local autoAdd = ns.GetSettings().autoAddNearby
-		if ns.GetSettings().autoTrack.enabled and autoAdd.enabled and (autoAdd.alsoWhileResting or not IsResting()) then
-			if not ns.GetPlayerRecord(identity.key, false) then
-				local entry = ns.CaptureContext(unit)
-				entry.source = "auto-nearby"
-				ns.AddEntry(identity.key, identity, entry)
-				if ns.RefreshAllTabs then
-					ns.RefreshAllTabs()
-				end
-			end
-		end
+	if identity and not ns.GetSettings().autoAddNearby.requireMouseover then
+		tryAutoAdd(unit, identity)
 	end
 
 	refreshPlateIcon(unit)
@@ -228,8 +235,16 @@ end
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 frame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+frame:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
 frame:SetScript("OnEvent", function(_, event, unit)
-	if event == "NAME_PLATE_UNIT_ADDED" then
+	if event == "UPDATE_MOUSEOVER_UNIT" then
+		if ns.GetSettings().autoAddNearby.requireMouseover and not UnitIsUnit("mouseover", "player") then
+			local identity = ns.IdentifyUnit("mouseover")
+			if identity then
+				tryAutoAdd("mouseover", identity)
+			end
+		end
+	elseif event == "NAME_PLATE_UNIT_ADDED" then
 		updateUnit(unit)
 	else
 		clearUnit(unit)

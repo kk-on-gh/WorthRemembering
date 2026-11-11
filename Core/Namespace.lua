@@ -10,7 +10,7 @@ ns.name = ADDON_NAME
 -- raw "HEADER_<text>" fallback regardless.
 _G["BINDING_NAME_WR_QUICKNOTE"] = "Worth Remembering"
 
-ns.CURRENT_SCHEMA_VERSION = 7
+ns.CURRENT_SCHEMA_VERSION = 8
 
 ns.STANDING_MIN = -100
 ns.STANDING_MAX = 100
@@ -52,7 +52,7 @@ ns.Defaults = {
 		tooltipEnabled = true,
 		tooltipContent = {
 			rating = true, lastNote = true,
-			timesSeen = false, bracket = false, noteCount = false,
+			timesSeen = false, bracket = false, noteCount = false, featuredNote = false,
 		},
 		-- the "Worth Remembering" submenu on a player's right-click menu. see
 		-- Core/ContextMenu.lua.
@@ -83,12 +83,14 @@ ns.Defaults = {
 			-- minGroupedMinutes: 0 disables the check (anyone currently grouped counts
 			-- regardless of how recently they joined)
 			quest = { enabled = true, repGain = 5, note = "Quested together in {{loc}}.", cooldownMinutes = 30, minGroupedMinutes = 10 },
-			-- CHAT_MSG_EMOTE has no "directed at you" flag either, just rendered text.
-			-- see AutoTrack.lua's onChatEmote. cooldownMinutes is per player, independent
-			-- across wave/thank/bow (waving then thanking logs both)
-			wave = { enabled = false, repGain = 1, note = "Waved at me.", cooldownMinutes = 5 },
-			thank = { enabled = false, repGain = 1, note = "Thanked me.", cooldownMinutes = 5 },
-			bow = { enabled = false, repGain = 1, note = "Bowed to me.", cooldownMinutes = 5 },
+			-- directed emotes, matched against the rendered chat text, see AutoTrack.lua's
+			-- onChatEmote. match is a plain, case-insensitive substring; requireYou also
+			-- needs "you" as a whole word. cooldownMinutes is per player, per rule
+			emoteRules = {
+				{ match = "wave", requireYou = true, enabled = false, repGain = 1, note = "Waved at me.", cooldownMinutes = 5 },
+				{ match = "thank", requireYou = true, enabled = false, repGain = 1, note = "Thanked me.", cooldownMinutes = 5 },
+				{ match = "bow", requireYou = true, enabled = false, repGain = 1, note = "Bowed to me.", cooldownMinutes = 5 },
+			},
 			-- actual aura detection, not a text emote, see AutoTrack.lua's onPlayerAura
 			buff = { enabled = true, repGain = 2, note = "Buffed me in {{loc}}.", cooldownMinutes = 5 },
 			-- from the duel-result system message, see AutoTrack.lua's onSystemMessage.
@@ -168,6 +170,8 @@ ns.Defaults = {
 		autoAddNearby = {
 			enabled = false,
 			alsoWhileResting = false,
+			-- only players you mouse over (world, plates, unit frames), not every nameplate
+			requireMouseover = false,
 		},
 		-- how often a sighting can bump seenCount (ns.IncrementSeenCount). without this,
 		-- losing/regaining a nameplate briefly would inflate the count
@@ -406,13 +410,9 @@ ns.AUTO_TRACK_DEFS = {
 		hint = "Logged when another player casts a helpful buff on you, as long as they aren't partied with you (partying is covered by \"Partied with\" above). Only catches it if the game can currently identify them, which needs them to be your target or have a visible nameplate (Shift+V shows friendly nameplates) at that exact moment, not just anyone nearby." },
 	{ key = "duel", source = "auto-duel", label = "Dueled", hasCooldown = true, hasDuelResult = true,
 		hint = "Logged when a duel you're in ends. {{duelresult}} in the note becomes the Victory or Loss text below it (fleeing counts as losing)." },
-	{ key = "wave", source = "auto-wave", label = "Waved at me", hasCooldown = true, isEmote = true,
-		hint = "Logged when another player /waves directly at you (not a general wave to nobody in particular)." },
-	{ key = "thank", source = "auto-thank", label = "Thanked me", hasCooldown = true, isEmote = true,
-		hint = "Logged when another player /thanks directly at you (not a general thanks to nobody in particular)." },
-	{ key = "bow", source = "auto-bow", label = "Bowed to me", hasCooldown = true, isEmote = true,
-		hint = "Logged when another player /bows directly to you (not a general bow to nobody in particular)." },
 }
+
+ns.MAX_EMOTE_RULES = 20
 
 -- Enum.RolodexType values per option, from Blizzard's RolodexConstantsDocumentation
 ns.RECENT_ALLY_TYPE_DEFS = {
@@ -485,9 +485,14 @@ local SOURCE_CATEGORY_BY_SOURCE = {
 	["auto-dungeon"] = "instance",
 	["auto-recentally"] = "allies",
 	["auto-nearby"] = "nearby",
+	["auto-emote"] = "emote",
+	-- per-emote sources from before emote rules (1.0 and earlier)
+	["auto-wave"] = "emote",
+	["auto-thank"] = "emote",
+	["auto-bow"] = "emote",
 }
 for _, def in ipairs(ns.AUTO_TRACK_DEFS) do
-	SOURCE_CATEGORY_BY_SOURCE[def.source] = def.isEmote and "emote" or "general"
+	SOURCE_CATEGORY_BY_SOURCE[def.source] = "general"
 end
 
 -- unrecognized auto sources fall under General

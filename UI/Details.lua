@@ -161,13 +161,7 @@ local function refresh()
 
 	-- Re-rolled on every refresh (not just when the player changes), so switching to
 	-- another tab and back re-randomizes it, same as walking away and coming back.
-	local candidates = {}
-	for _, entry in ipairs(record.entries) do
-		if entry.featured and entry.text and entry.text ~= "" then
-			candidates[#candidates + 1] = entry
-		end
-	end
-	local chosen = candidates[1] and candidates[math.random(#candidates)] or nil
+	local chosen = ns.PickFeaturedEntry(record)
 	panel.featuredNote:SetText(chosen and ("\"" .. chosen.text .. "\"") or "")
 
 	panel.statsLine2:SetText(entryCount .. entryWord .. "   \124\124   " .. noteCount .. noteWord
