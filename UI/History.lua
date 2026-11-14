@@ -455,7 +455,7 @@ local COLUMNS = {
 	{ key = "theirLevel", label = "Their Lvl", width = 63, min = 50 },
 	{ key = "zone", label = "Location", width = 110, min = 60, onCellClick = onZoneCellClick },
 	{ key = "note", label = "Note", width = 0, flex = true },
-	{ key = "featured", label = "Featured", width = 60, min = 50, cellType = "checkbox", onCheckboxClick = onFeaturedCheckboxClick },
+	{ key = "featured", label = "Featured", width = 65, min = 50, cellType = "checkbox", onCheckboxClick = onFeaturedCheckboxClick },
 }
 
 local function sortValue(item, key)

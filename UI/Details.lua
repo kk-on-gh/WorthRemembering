@@ -24,7 +24,7 @@ local COLUMNS = {
 	{ key = "theirLevel", label = "Their Lvl", width = 86, min = 50 },
 	{ key = "zone", label = "Zone", width = 110, min = 60 },
 	{ key = "note", label = "Note", width = 0, flex = true },
-	{ key = "featured", label = "Featured", width = 60, min = 50, cellType = "checkbox", onCheckboxClick = onFeaturedCheckboxClick },
+	{ key = "featured", label = "Featured", width = 65, min = 50, cellType = "checkbox", onCheckboxClick = onFeaturedCheckboxClick },
 }
 
 local function getItems()
