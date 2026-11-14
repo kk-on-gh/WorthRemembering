@@ -78,29 +78,23 @@ local function applySmallBackdrop(frame)
 	end
 end
 
--- checkbox art is drawn well below its native size, and without mipmaps its thin border
--- lines drop out depending on where the box lands. trilinear filtering keeps them
-function ns.UnsnapCheckbox(btn)
-	local textures = { btn:GetNormalTexture(), btn:GetPushedTexture(), btn:GetHighlightTexture(),
-		btn:GetCheckedTexture(), btn:GetDisabledCheckedTexture() }
-	for i = 1, 5 do
-		local tex = textures[i]
-		if tex then
-			local atlas = tex.GetAtlas and tex:GetAtlas()
-			if atlas then
-				tex:SetAtlas(atlas, false, "TRILINEAR")
-			else
-				local file = tex:GetTexture()
-				if file then
-					tex:SetTexture(file, nil, nil, "TRILINEAR")
-				end
-			end
-			if tex.SetSnapToPixelGrid then
-				tex:SetSnapToPixelGrid(false)
-				tex:SetTexelSnappingBias(0)
-			end
-		end
-	end
+-- table checkbox drawn from a 1px backdrop: Blizzard's checkbox art loses a border edge
+-- when scaled down to row size, depending on where each row lands
+function ns.CreateCrispCheckbox(parent, size)
+	local btn = CreateFrame("CheckButton", nil, parent, "BackdropTemplate")
+	btn:SetSize(size, size)
+	applySmallBackdrop(btn)
+	local check = btn:CreateTexture(nil, "OVERLAY")
+	check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+	check:SetPoint("CENTER", 1, 1)
+	check:SetSize(size + 6, size + 6)
+	btn:SetCheckedTexture(check)
+	local highlight = btn:CreateTexture(nil, "HIGHLIGHT")
+	highlight:SetPoint("TOPLEFT", 1, -1)
+	highlight:SetPoint("BOTTOMRIGHT", -1, 1)
+	highlight:SetColorTexture(1, 0.82, 0, 0.15)
+	btn:SetHighlightTexture(highlight)
+	return btn
 end
 
 local smallTooltip
@@ -178,7 +172,6 @@ function ns.CreateSmallCheckbox(parent, size, checked, onClick)
 	btn:SetCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check")
 	btn:SetDisabledCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check-Disabled")
 	btn:SetChecked(checked)
-	ns.UnsnapCheckbox(btn)
 	btn:SetScript("OnClick", function(self)
 		onClick(self:GetChecked() and true or false)
 	end)
@@ -450,7 +443,6 @@ function ns.CreateFilterBar(parent, config)
 		local check = CreateFrame("CheckButton", nil, bar, "UICheckButtonTemplate")
 		check:SetSize(20, 20)
 		check:SetChecked(cc.initial)
-		ns.UnsnapCheckbox(check)
 		check:SetPoint("LEFT", prevWidget or bar, prevWidget and "RIGHT" or "LEFT", prevWidget and 6 or 8, 0)
 		check:SetScript("OnClick", function(self)
 			cc.onChange(self:GetChecked() and true or false)
@@ -517,7 +509,6 @@ function ns.CreateFilterBar(parent, config)
 		local check = CreateFrame("CheckButton", nil, bar, "UICheckButtonTemplate")
 		check:SetSize(20, 20)
 		check:SetChecked(rc.initial)
-		ns.UnsnapCheckbox(check)
 		check:SetPoint("RIGHT", label, "LEFT", -2, 0)
 		check:SetScript("OnClick", function(self)
 			rc.onChange(self:GetChecked() and true or false)
@@ -981,10 +972,8 @@ function ns.CreateSortableTable(parent, config)
 					-- the actual checkbox is a fixed-size child anchored inside it, so a
 					-- wide column doesn't stretch/distort it.
 					cell = CreateFrame("Frame", nil, row)
-					local check = CreateFrame("CheckButton", nil, cell, "UICheckButtonTemplate")
-					check:SetSize(18, 18)
-					check:SetPoint("LEFT", 0, 0)
-					ns.UnsnapCheckbox(check)
+					local check = ns.CreateCrispCheckbox(cell, 13)
+					check:SetPoint("LEFT", 2, 0)
 					check:SetScript("OnClick", function(self)
 						if col.onCheckboxClick then
 							col.onCheckboxClick(row.item, self:GetChecked() and true or false)
