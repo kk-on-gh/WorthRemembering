@@ -418,6 +418,9 @@ function ns.CreateFilterBar(parent, config)
 		local searchBox = CreateFrame("EditBox", nil, bar, "SearchBoxTemplate")
 		searchBox:SetSize(150, 20)
 		searchBox:SetPoint("LEFT", 8, 0)
+		if config.search.placeholder and searchBox.Instructions then
+			searchBox.Instructions:SetText(config.search.placeholder)
+		end
 		searchBox:HookScript("OnTextChanged", function(self)
 			config.search.onChange(self:GetText():lower())
 		end)

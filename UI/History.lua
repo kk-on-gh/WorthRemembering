@@ -181,12 +181,19 @@ local FACTION_OPTIONS = {
 	{ value = "Alliance", text = "Alliance" },
 }
 
+-- comma-separated terms match any of them, same as the Players tab
 local function matchesSearch(record, key, entry)
 	if search == "" then
 		return true
 	end
 	local haystack = (ns.DisplayName(record, key) .. " " .. (entry.zone or "") .. " " .. (entry.text or "")):lower()
-	return haystack:find(search, 1, true) ~= nil
+	for rawTerm in search:gmatch("[^,]+") do
+		local term = rawTerm:match("^%s*(.-)%s*$")
+		if term ~= "" and haystack:find(term, 1, true) then
+			return true
+		end
+	end
+	return false
 end
 
 -- Matches if the entry's delta sign satisfies ANY selected sign (e.g. "Positive" +

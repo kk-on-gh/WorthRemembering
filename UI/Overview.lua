@@ -997,7 +997,7 @@ local function createPlayersContent()
 
 	refreshBracketFilterOptions()
 	filterBar = ns.CreateFilterBar(content, {
-		search = { onChange = function(text) search = text; ns.RefreshOverview() end },
+		search = { placeholder = "Search players", onChange = function(text) search = text; ns.RefreshOverview() end },
 		dropdowns = {
 			{
 				multi = true,
