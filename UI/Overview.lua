@@ -647,8 +647,8 @@ local COLUMNS = {
 	-- the Standing column's own identical reasoning above
 	{ key = "notes", label = "Notes", width = 90,
 		min = function() return ns.GetSettings().hidePlayersNewButton and 40 or 90 end },
-	{ key = "seenCount", label = "Times Seen", width = 77, min = 60 },
-	{ key = "ignored", label = "Ignored", width = 60, min = 45, onCellClick = onIgnoredCellClick },
+	{ key = "seenCount", label = "Times Seen", width = 79, min = 60 },
+	{ key = "ignored", label = "Ignored", width = 61, min = 45, onCellClick = onIgnoredCellClick },
 	{ key = "lastSeen", label = "Last Seen", width = 100, min = 100 },
 	{ key = "lastLocation", label = "Last Location", width = 120, min = 70 },
 	{ key = "lastNote", label = "Last Note", width = 0 }, -- flex, always last
