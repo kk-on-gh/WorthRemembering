@@ -2,7 +2,7 @@
 
 All notable changes to Worth Remembering are documented here.
 
-## [1.2]
+## [1.2] - 2026-11-14
 
 ### Added
 - Two guided tours, started from the About tab (or /wr tour): a basics tour of the main window and how to add notes, and a settings tour that opens and walks through the Options pages worth knowing about. New installs are offered the basics tour on first login, and existing users get a one-time offer too. Patch notes for recent versions also get a "what's new" tour button that walks through that version's new features.
