@@ -605,15 +605,25 @@ local function onFactionCellClick(item)
 	ns.RefreshOverview()
 end
 
+-- jumps to Options > Ignore: on the list, searched to just them; caught by a rule,
+-- the page as-is with the rules on top. not ignored: nothing to go to
 local function onIgnoredCellClick(item)
-	local value = ignoredStatus(item.ignoreSource)
-	if ignoredFilter.count == 1 and ignoredFilter.selected[value] then
-		ignoredFilter:Clear()
-	else
-		ignoredFilter:Set(value)
+	local source = item.ignoreSource
+	if not source or not ns.ShowIgnoreSettings then
+		return
 	end
-	syncClassRaceDropdowns()
-	ns.RefreshOverview()
+	local onList = source == "list" or source == "exempt"
+	ns.ShowIgnoreSettings(onList and ns.DisplayName(item.record, item.key) or "")
+end
+
+local function ignoredCellTooltip(item)
+	local source = item.ignoreSource
+	if source == "list" or source == "exempt" then
+		return "Click to see them in your ignore list (Options > Ignore)."
+	elseif source then
+		return "Ignored by your " .. source .. " rule. Click to open Options > Ignore."
+	end
+	return nil
 end
 
 -- click a Bracket cell to toggle just that bracket in the filter, clicking an
@@ -648,7 +658,7 @@ local COLUMNS = {
 	{ key = "notes", label = "Notes", width = 90,
 		min = function() return ns.GetSettings().hidePlayersNewButton and 40 or 90 end },
 	{ key = "seenCount", label = "Times Seen", width = 80, min = 60 },
-	{ key = "ignored", label = "Ignored", width = 61, min = 45, onCellClick = onIgnoredCellClick },
+	{ key = "ignored", label = "Ignored", width = 61, min = 45, onCellClick = onIgnoredCellClick, cellTooltip = ignoredCellTooltip },
 	{ key = "lastSeen", label = "Last Seen", width = 100, min = 100 },
 	{ key = "lastLocation", label = "Last Location", width = 120, min = 70 },
 	{ key = "lastNote", label = "Last Note", width = 0 }, -- flex, always last

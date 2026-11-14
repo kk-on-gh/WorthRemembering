@@ -15,6 +15,7 @@ All notable changes to Worth Remembering are documented here.
 ### Changed
 - Ignoring a player for Indicators no longer stops their Times Seen from counting. They're still seen, they just don't get an icon, tag, or alert.
 - The History tab's search now takes comma-separated terms too, matching any of them, same as the Players tab.
+- Clicking a cell in the Players tab's Ignored column now opens Options > Ignore instead of filtering: searched to just that player if they're on your list, or with the rules on top if a rule caught them. Hovering the cell says which.
 - Statistics: clicking Total Positive or Total Negative Standing Given opens the History tab filtered to just those changes.
 - The Players and History filter bars now rearrange to fit: fewer rows when filters are hidden, and controls wrap onto another row instead of overlapping in a narrow window.
 - Players whose class isn't known yet (e.g. added by right-clicking their name in chat before ever seeing them) now show in gray instead of white, which is the Priest color.

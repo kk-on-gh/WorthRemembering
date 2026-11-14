@@ -137,6 +137,25 @@ function ns.AttachTooltip(frame, text)
 	end)
 end
 
+-- for tooltips whose text depends on what's under the mouse (e.g. a table cell)
+function ns.ShowSmallTooltip(owner, text)
+	local tip = getSmallTooltip()
+	tip.text:SetText(text)
+	local width = math.min(SMALL_TOOLTIP_MAX_WIDTH, tip.text:GetStringWidth())
+	tip.text:SetWidth(width)
+	tip:SetWidth(width + 12)
+	tip:SetHeight(tip.text:GetStringHeight() + 10)
+	tip:ClearAllPoints()
+	tip:SetPoint("BOTTOM", owner, "TOP", 0, 4)
+	tip:Show()
+end
+
+function ns.HideSmallTooltip()
+	if smallTooltip then
+		smallTooltip:Hide()
+	end
+end
+
 -- Same small popup as ns.AttachTooltip, but via HookScript instead of SetScript: for
 -- widgets (like the dropdown template) that already have their own OnEnter/OnLeave
 -- driving hover visuals, so attaching a tooltip doesn't clobber that behavior.
@@ -1250,14 +1269,21 @@ function ns.CreateSortableTable(parent, config)
 							col.onCellClick(row.item)
 						end
 					end)
-					cellButton:SetScript("OnEnter", function()
+					cellButton:SetScript("OnEnter", function(self)
 						if rowHighlight then
 							rowHighlight:Show()
+						end
+						local tip = col.cellTooltip and row.item and col.cellTooltip(row.item)
+						if tip then
+							ns.ShowSmallTooltip(self, tip)
 						end
 					end)
 					cellButton:SetScript("OnLeave", function()
 						if rowHighlight then
 							rowHighlight:Hide()
+						end
+						if col.cellTooltip then
+							ns.HideSmallTooltip()
 						end
 					end)
 					row.cellButtons[col.key] = cellButton

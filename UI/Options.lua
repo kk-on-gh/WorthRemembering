@@ -3454,6 +3454,13 @@ local function buildIgnoreListBox(parent, y)
 	local searchBox = CreateFrame("EditBox", nil, box, "SearchBoxTemplate")
 	searchBox:SetSize(160, 20)
 	searchBox:SetPoint("RIGHT", countLabel, "LEFT", -12, 0)
+	-- Players tab's Ignored cell lands here with that player searched
+	function ns.ShowIgnoreSettings(text)
+		ns.SelectMainTab("options")
+		ns.SelectOptionsSubTab("ignore")
+		searchBox:SetText(text or "")
+		searchBox:ClearFocus()
+	end
 	searchBox:HookScript("OnTextChanged", function(self)
 		search = self:GetText():lower()
 		if refresh then
