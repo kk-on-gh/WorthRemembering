@@ -21,6 +21,18 @@ local table_ -- the ns.CreateSortableTable instance
 local filterBar
 local charBar
 local classRaceBar
+
+ns.FILTER_TOGGLES = ns.FILTER_TOGGLES or {}
+ns.FILTER_TOGGLES.history = {
+	{ value = "standing", text = "Standing changes" },
+	{ value = "source", text = "Sources" },
+	{ value = "notesOnly", text = "Notes only" },
+	{ value = "character", text = "Characters + Current only" },
+	{ value = "class", text = "Class" },
+	{ value = "body", text = "Body type" },
+	{ value = "race", text = "Race" },
+	{ value = "faction", text = "Faction" },
+}
 local search = ""
 local notesOnly = false
 local currentCharOnly = false
@@ -735,6 +747,56 @@ function ns.BuildHistoryPanel(parent)
 		function(value) table_.SetColumnVisible(value, not table_.IsColumnVisible(value)) end,
 		columnsSummaryText, 150, "Show All Columns", showAllColumns)
 	columnsDropdown:SetPoint("RIGHT", clearFiltersButton, "LEFT", -8, 0)
+
+	local countLabel = filterBar.countLabel
+	countLabel:SetWidth(100)
+	countLabel:SetJustifyH("RIGHT")
+	countLabel.fixedWidth = true
+
+	local top, bottom = filterBar.dropdowns, classRaceBar.dropdowns
+	local notesCheck, charCheck, multi = filterBar.checkbox, charBar.checkbox, charBar.rightCheckbox
+	local function dropdownUnit(id, dropdown, filter)
+		return { id = id, pieces = { { dropdown } }, clear = function() filter:Clear(); dropdown:RefreshText() end }
+	end
+	ns.CreateFilterReflow({
+		tab = "history",
+		refresh = ns.RefreshHistory,
+		parent = parent,
+		rows = { filterBar, charBar, classRaceBar },
+		top = -4, left = 12, right = -12,
+		groups = {
+			{
+				{ id = "search", pieces = { { filterBar.searchBox } } },
+				dropdownUnit("standing", top[1], signFilter),
+				dropdownUnit("source", top[2], sourceFilter),
+				{ id = "notesOnly", pieces = { { notesCheck }, { notesCheck.label, 2 } }, clear = function()
+					notesOnly = false; notesCheck:SetChecked(false)
+				end },
+			},
+			{
+				{ id = "character", pieces = { { charBar.dropdowns[1] }, { charCheck, 6 }, { charCheck.label, 2 } }, clear = function()
+					characterFilter:Clear(); charBar.dropdowns[1]:RefreshText()
+					currentCharOnly = false; charCheck:SetChecked(false)
+				end },
+			},
+			{
+				dropdownUnit("class", bottom[1], classFilter),
+				dropdownUnit("body", bottom[2], sexFilter),
+				dropdownUnit("race", bottom[3], raceFilter),
+				dropdownUnit("faction", bottom[4], factionFilter),
+			},
+		},
+		right = {
+			{ id = "count", row = 1, pieces = { { countLabel } } },
+			{ id = "multiSelect", row = 2, pieces = { { multi }, { multi.label, 2 } } },
+			{ id = "columns", row = 3, pieces = { { columnsDropdown }, { clearFiltersButton, 8 } } },
+		},
+		onRowsChanged = function(rowCount)
+			table_.container:ClearAllPoints()
+			table_.container:SetPoint("TOPLEFT", 12, -(6 + rowCount * 30))
+			table_.container:SetPoint("BOTTOMRIGHT", -12, 0)
+		end,
+	})
 
 	ns.RefreshHistory()
 end

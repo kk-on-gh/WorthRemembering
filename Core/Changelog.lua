@@ -7,7 +7,11 @@ ns.CHANGELOG = {
 	{
 		version = "1.1.1", date = "2026-11-14", shipped = false,
 		sections = {
+			{ heading = "Added", items = {
+				"A new \"Filters\" box in Options > General: choose which filters the Players and History tabs show. Hiding a filter also clears it.",
+			}},
 			{ heading = "Changed", items = {
+				"The Players and History filter bars now rearrange to fit: fewer rows when filters are hidden, and controls wrap onto another row instead of overlapping in a narrow window.",
 				"Minor UI adjustments",
 			}},
 			{ heading = "Fixed", items = {

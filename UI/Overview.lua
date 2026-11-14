@@ -146,6 +146,21 @@ local NOTES_OPTIONS = {
 	{ value = "unfeatured", text = "Un-featured notes" },
 }
 
+-- filters that Options > General > Filters can hide, ids match the reflow units below
+ns.FILTER_TOGGLES = ns.FILTER_TOGGLES or {}
+ns.FILTER_TOGGLES.players = {
+	{ value = "standing", text = "Standings" },
+	{ value = "bracket", text = "Brackets" },
+	{ value = "notes", text = "Notes" },
+	{ value = "character", text = "Characters + Current only" },
+	{ value = "lastSeen", text = "Last seen + Invert" },
+	{ value = "ignored", text = "Ignore status" },
+	{ value = "class", text = "Class" },
+	{ value = "body", text = "Body type" },
+	{ value = "race", text = "Race" },
+	{ value = "faction", text = "Faction" },
+}
+
 local IGNORED_OPTIONS = {
 	{ value = "ignored", text = "Ignored" },
 	{ value = "notIgnored", text = "Not ignored" },
@@ -1220,6 +1235,59 @@ local function createPlayersContent()
 		function(value) playersTable.SetColumnVisible(value, not playersTable.IsColumnVisible(value)) end,
 		columnsSummaryText, 150, "Show All Columns", showAllColumns)
 	columnsDropdown:SetPoint("RIGHT", clearFiltersButton, "LEFT", -8, 0)
+
+	local countLabel = filterBar.countLabel
+	countLabel:SetWidth(100)
+	countLabel:SetJustifyH("RIGHT")
+	countLabel.fixedWidth = true
+
+	local top, mid, bottom = filterBar.dropdowns, charBar.dropdowns, classRaceBar.dropdowns
+	local checks, multi = charBar.checkboxes, charBar.rightCheckbox
+	local function dropdownUnit(id, dropdown, filter)
+		return { id = id, pieces = { { dropdown } }, clear = function() filter:Clear(); dropdown:RefreshText() end }
+	end
+	ns.CreateFilterReflow({
+		tab = "players",
+		refresh = ns.RefreshOverview,
+		parent = content,
+		rows = { filterBar, charBar, classRaceBar },
+		top = -4, left = 12, right = -12,
+		groups = {
+			{
+				{ id = "search", pieces = { { filterBar.searchBox } } },
+				dropdownUnit("standing", top[1], signFilter),
+				dropdownUnit("bracket", top[2], bracketFilter),
+				dropdownUnit("notes", top[3], notesFilter),
+			},
+			{
+				{ id = "character", pieces = { { mid[1] }, { checks[1], 6 }, { checks[1].label, 2 } }, clear = function()
+					characterFilter:Clear(); mid[1]:RefreshText()
+					currentCharOnly = false; checks[1]:SetChecked(false)
+				end },
+				{ id = "lastSeen", pieces = { { mid[2] }, { checks[2], 6 }, { checks[2].label, 2 } }, clear = function()
+					lastSeenFilter:Clear(); mid[2]:RefreshText()
+					lastSeenInvert = false; checks[2]:SetChecked(false)
+				end },
+				dropdownUnit("ignored", mid[3], ignoredFilter),
+			},
+			{
+				dropdownUnit("class", bottom[1], classFilter),
+				dropdownUnit("body", bottom[2], sexFilter),
+				dropdownUnit("race", bottom[3], raceFilter),
+				dropdownUnit("faction", bottom[4], factionFilter),
+			},
+		},
+		right = {
+			{ id = "count", row = 1, pieces = { { countLabel }, { filterBar.actionButton, 10 } } },
+			{ id = "multiSelect", row = 2, pieces = { { multi }, { multi.label, 2 } } },
+			{ id = "columns", row = 3, pieces = { { columnsDropdown }, { clearFiltersButton, 8 } } },
+		},
+		onRowsChanged = function(rowCount)
+			playersTable.container:ClearAllPoints()
+			playersTable.container:SetPoint("TOPLEFT", 12, -(6 + rowCount * 30))
+			playersTable.container:SetPoint("BOTTOMRIGHT", -12, 0)
+		end,
+	})
 end
 
 -- window position/size are saved on every move/resize and restored at creation,

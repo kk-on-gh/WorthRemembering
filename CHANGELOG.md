@@ -4,7 +4,11 @@ All notable changes to Worth Remembering are documented here.
 
 ## [1.1.1]
 
+### Added
+- A new "Filters" box in Options > General: choose which filters the Players and History tabs show. Hiding a filter also clears it.
+
 ### Changed
+- The Players and History filter bars now rearrange to fit: fewer rows when filters are hidden, and controls wrap onto another row instead of overlapping in a narrow window.
 - Minor UI adjustments
 
 ### Fixed

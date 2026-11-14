@@ -451,6 +451,7 @@ function ns.CreateFilterBar(parent, config)
 		local label = bar:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 		label:SetPoint("LEFT", check, "RIGHT", 2, 0)
 		label:SetText(cc.label)
+		check.label = label
 		if cc.tooltip then
 			ns.AttachHookTooltip(check, cc.tooltip)
 		end
@@ -509,6 +510,7 @@ function ns.CreateFilterBar(parent, config)
 		local check = CreateFrame("CheckButton", nil, bar, "UICheckButtonTemplate")
 		check:SetSize(20, 20)
 		check:SetChecked(rc.initial)
+		check.label = label
 		check:SetPoint("RIGHT", label, "LEFT", -2, 0)
 		check:SetScript("OnClick", function(self)
 			rc.onChange(self:GetChecked() and true or false)
@@ -529,6 +531,219 @@ function ns.CreateFilterBar(parent, config)
 	end
 
 	return bar
+end
+
+-- Re-flows filter controls across as many rows as the width needs. Reuses spec.rows
+-- (the tab's existing filter bars) as row frames and adds more if a narrow window needs
+-- them. Left units flow left to right; a group moves to a new row whole when it fits
+-- there, otherwise it wraps unit by unit. Right units stay right-aligned in order,
+-- each on its preferred row (unit.row), clamped to the rows in use.
+-- unit = { id, pieces = { { region }, { region, gapBefore }, ... }, clear = fn? }
+local FLOW_ROW_HEIGHT, FLOW_ROW_STEP, FLOW_PAD, FLOW_GAP, FLOW_SIDE_GAP, FLOW_MAX_ROWS = 28, 30, 8, 10, 16, 8
+
+local function flowRegionWidth(region)
+	if region:GetObjectType() == "FontString" and not region.fixedWidth then
+		return region:GetStringWidth()
+	end
+	return region:GetWidth()
+end
+
+local function flowUnitWidth(unit)
+	local w = 0
+	for i, piece in ipairs(unit.pieces) do
+		w = w + (i > 1 and (piece[2] or 0) or 0) + flowRegionWidth(piece[1])
+	end
+	return w
+end
+
+ns.FILTER_FLOWS = {}
+
+function ns.CreateFilterReflow(spec)
+	local flow = { hidden = {} }
+	local rows = spec.rows
+	local rowCount, lastWidth = 0, nil
+
+	local function getRow(i)
+		if not rows[i] then
+			local row = CreateFrame("Frame", nil, spec.parent, "BackdropTemplate")
+			row:SetHeight(FLOW_ROW_HEIGHT)
+			ns.ApplyPanelBackdrop(row, 0.75)
+			rows[i] = row
+		end
+		return rows[i]
+	end
+
+	local function plan(width, maxRows, force, breakGroups)
+		local rightWidth, rightPlan = {}, {}
+		for r = 1, maxRows do
+			rightWidth[r] = 0
+		end
+		for _, unit in ipairs(spec.right) do
+			local r = math.min(unit.row or 1, maxRows)
+			rightPlan[#rightPlan + 1] = { unit = unit, row = r }
+			rightWidth[r] = rightWidth[r] + (rightWidth[r] > 0 and FLOW_GAP or 0) + flowUnitWidth(unit)
+		end
+		local function avail(r)
+			if r > maxRows then
+				return force and math.huge or -1
+			end
+			return width - 2 * FLOW_PAD - rightWidth[r] - (rightWidth[r] > 0 and FLOW_SIDE_GAP or 0)
+		end
+
+		local leftPlan = {}
+		local r, x = 1, 0
+		for _, group in ipairs(spec.groups) do
+			local units, groupWidth = {}, 0
+			for _, unit in ipairs(group) do
+				if not flow.hidden[unit.id] then
+					local w = flowUnitWidth(unit)
+					units[#units + 1] = { unit = unit, w = w }
+					groupWidth = groupWidth + (#units > 1 and FLOW_GAP or 0) + w
+				end
+			end
+			if #units > 0 and x > 0 and (breakGroups or x + FLOW_GAP + groupWidth > avail(r)) then
+				r, x = r + 1, 0
+			end
+			for _, u in ipairs(units) do
+				if x > 0 and x + FLOW_GAP + u.w > avail(r) then
+					r, x = r + 1, 0
+				end
+				if r > maxRows and not force then
+					return nil
+				end
+				local ux = x > 0 and x + FLOW_GAP or 0
+				leftPlan[#leftPlan + 1] = { unit = u.unit, row = math.min(r, maxRows), x = ux }
+				x = ux + u.w
+			end
+		end
+		return leftPlan, rightPlan, x > 0 and r or r - 1
+	end
+
+	function flow.Layout(force)
+		local width = getRow(1):GetWidth()
+		if not width or width <= 0 or (not force and width == lastWidth) then
+			return
+		end
+		lastWidth = width
+
+		for _, group in ipairs(spec.groups) do
+			for _, unit in ipairs(group) do
+				for _, piece in ipairs(unit.pieces) do
+					piece[1]:SetShown(not flow.hidden[unit.id])
+				end
+			end
+		end
+
+		local needed, leftPlan, rightPlan, leftRows = FLOW_MAX_ROWS, nil, nil, 0
+		for n = 1, FLOW_MAX_ROWS do
+			leftPlan, rightPlan, leftRows = plan(width, n)
+			if leftPlan then
+				needed = n
+				break
+			end
+		end
+		if not leftPlan then
+			leftPlan, rightPlan = plan(width, FLOW_MAX_ROWS, true)
+		elseif leftRows < needed then
+			-- a row with only right-side buttons looks broken: spread the groups out instead
+			local spreadLeft, spreadRight = plan(width, needed, false, true)
+			if spreadLeft then
+				leftPlan, rightPlan = spreadLeft, spreadRight
+			end
+		end
+
+		for i = 1, needed do
+			local row = getRow(i)
+			local y = spec.top - (i - 1) * FLOW_ROW_STEP
+			row:ClearAllPoints()
+			row:SetPoint("TOPLEFT", spec.parent, "TOPLEFT", spec.left, y)
+			row:SetPoint("TOPRIGHT", spec.parent, "TOPRIGHT", spec.right, y)
+			row:Show()
+		end
+		for i = needed + 1, #rows do
+			rows[i]:Hide()
+		end
+
+		for _, p in ipairs(leftPlan) do
+			local row, prev = rows[p.row], nil
+			for i, piece in ipairs(p.unit.pieces) do
+				local region = piece[1]
+				region:SetParent(row)
+				region:ClearAllPoints()
+				if prev then
+					region:SetPoint("LEFT", prev, "RIGHT", piece[2] or 0, 0)
+				else
+					region:SetPoint("LEFT", row, "LEFT", FLOW_PAD + p.x, 0)
+				end
+				prev = region
+			end
+		end
+
+		local rightByRow = {}
+		for _, p in ipairs(rightPlan) do
+			rightByRow[p.row] = rightByRow[p.row] or {}
+			table.insert(rightByRow[p.row], p.unit)
+		end
+		for r, units in pairs(rightByRow) do
+			local row, rx = rows[r], FLOW_PAD
+			for ui = #units, 1, -1 do
+				local unit, nextRegion = units[ui], nil
+				for pi = #unit.pieces, 1, -1 do
+					local region = unit.pieces[pi][1]
+					region:SetParent(row)
+					region:ClearAllPoints()
+					if nextRegion then
+						region:SetPoint("RIGHT", nextRegion, "LEFT", -(unit.pieces[pi + 1][2] or 0), 0)
+					else
+						region:SetPoint("RIGHT", row, "RIGHT", -rx, 0)
+					end
+					nextRegion = region
+				end
+				rx = rx + flowUnitWidth(unit) + FLOW_GAP
+			end
+		end
+
+		if needed ~= rowCount then
+			rowCount = needed
+			if spec.onRowsChanged then
+				spec.onRowsChanged(needed)
+			end
+		end
+	end
+
+	-- returns true if hiding cleared an active filter, so the caller refreshes
+	function flow.SetHidden(hiddenSet, initial)
+		local cleared = false
+		for _, group in ipairs(spec.groups) do
+			for _, unit in ipairs(group) do
+				local hide = hiddenSet[unit.id] == true
+				if hide and not flow.hidden[unit.id] and not initial and unit.clear then
+					unit.clear()
+					cleared = true
+				end
+				flow.hidden[unit.id] = hide or nil
+			end
+		end
+		flow.Layout(true)
+		return cleared
+	end
+
+	getRow(1):HookScript("OnSizeChanged", function()
+		flow.Layout()
+	end)
+
+	if spec.tab then
+		ns.FILTER_FLOWS[spec.tab] = { flow = flow, refresh = spec.refresh }
+		flow.SetHidden(ns.GetSettings().hiddenFilters[spec.tab], true)
+	end
+	return flow
+end
+
+function ns.ApplyHiddenFilters(tab)
+	local entry = ns.FILTER_FLOWS[tab]
+	if entry and entry.flow.SetHidden(ns.GetSettings().hiddenFilters[tab]) and entry.refresh then
+		entry.refresh()
+	end
 end
 
 -- Generic sortable/resizable multi-column table in a scroll frame: a themed header row

@@ -743,6 +743,53 @@ local function buildChatMinimapBox(parent, y)
 	return y - height - 6
 end
 
+local FILTER_TABS = {
+	{ tab = "players", label = "Players tab" },
+	{ tab = "history", label = "History tab" },
+}
+
+local function buildFiltersBox(parent, y)
+	local height = 81
+	local box = createSectionBox(parent, y, height, "Filters")
+	local hiddenFilters = ns.GetSettings().hiddenFilters
+
+	local labels = {}
+	for i, def in ipairs(FILTER_TABS) do
+		local label = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		label:SetPoint("TOPLEFT", 12, -28 - (i - 1) * 26)
+		label:SetText(def.label)
+		labels[i] = label
+	end
+	local labelWidth = 0
+	for _, label in ipairs(labels) do
+		labelWidth = math.max(labelWidth, label:GetStringWidth())
+	end
+
+	for i, def in ipairs(FILTER_TABS) do
+		local hidden = hiddenFilters[def.tab]
+		local options = ns.FILTER_TOGGLES[def.tab]
+		local dropdown = ns.CreateMultiSelectDropdown(box, options,
+			function(value) return not hidden[value] end,
+			function(value)
+				hidden[value] = not hidden[value] or nil
+				ns.ApplyHiddenFilters(def.tab)
+			end,
+			function()
+				local count = 0
+				for _, option in ipairs(options) do
+					if hidden[option.value] then
+						count = count + 1
+					end
+				end
+				return count == 0 and "All shown" or (count .. " hidden")
+			end, 160)
+		dropdown:SetPoint("LEFT", labels[i], "LEFT", labelWidth + 10, 0)
+		ns.AttachHookTooltip(dropdown, "Uncheck a filter to hide it from the " .. def.label .. "'s filter bar. Hiding a filter also clears it.")
+	end
+
+	return y - height - 6
+end
+
 local TOOLTIP_CONTENT_OPTIONS = {
 	{ value = "rating", text = "Rating" },
 	{ value = "bracket", text = "Bracket" },
@@ -1494,6 +1541,7 @@ local function buildGeneralPanel(parent)
 	local boxes = {
 		{ key = "keybind", build = buildKeybindControl },
 		{ key = "window", build = buildWindowBox },
+		{ key = "filters", build = buildFiltersBox },
 		{ key = "nearby", build = buildNearbyWindowControl },
 		{ key = "nameplate", build = buildNameplateIconControl },
 		{ key = "chatMinimap", build = buildChatMinimapBox },

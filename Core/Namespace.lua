@@ -50,6 +50,8 @@ ns.Defaults = {
 		-- WR Rep/last-note line added to a notable player's unit tooltip. see
 		-- Core/Tooltip.lua.
 		tooltipEnabled = true,
+		-- filter id -> true to hide it from that tab's filter bar
+		hiddenFilters = { players = {}, history = {} },
 		tooltipContent = {
 			rating = true, lastNote = true,
 			timesSeen = false, bracket = false, noteCount = false, featuredNote = false,
