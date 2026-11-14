@@ -131,7 +131,7 @@ ns.TOURS = {
 		{
 			tab = "players", target = "players.ignoredFilter", side = "below",
 			title = "On the Players tab",
-			text = "An Ignored column and filter show who's ignored and why: on your list, or by which rule.",
+			text = "This filter narrows the list to ignored or not-ignored players.\n\nThe new Ignored column shows why: \"Yes\" means they're on your list, \"Yes (Guild)\" means a rule caught them, and \"Exempt\" means they're on your list with every box unchecked.",
 		},
 		{
 			tab = "about",
