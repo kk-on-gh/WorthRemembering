@@ -765,6 +765,24 @@ function ns.EndTour()
 	end
 end
 
+StaticPopupDialogs["WR_TOUR_OFFER_EXISTING"] = {
+	text = "Thank you for using Worth Remembering!\n\n"
+		.. "I promise I'm not in the business of unsolicited popups, so this is a one-off for existing users. "
+		.. "I've added a tour feature to walk through most of the things Worth Remembering does, and I wanted to "
+		.. "offer it this once since there's a good chance features have been added since you started using the addon.\n\n"
+		.. "Would you like to take the tour?\n"
+		.. "(\"No\" will never show you this window again.)",
+	button1 = "Take the tour",
+	button2 = "No",
+	OnAccept = function()
+		ns.StartTour("basics")
+	end,
+	timeout = 0,
+	whileDead = true,
+	hideOnEscape = true,
+	preferredIndex = 3,
+}
+
 StaticPopupDialogs["WR_TOUR_OFFER"] = {
 	text = "Welcome to Worth Remembering!\n\nWant a quick tour of the basics? It takes about two minutes.",
 	button1 = "Take the tour",

@@ -45,6 +45,7 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
 			ns.SetLastSeenVersion(version)
 			if lastSeen == nil and #ns.GetAllPlayerKeys() == 0 then
 				ns.EnsureDemoPlayer()
+				ns.MarkTourOffered()
 				C_Timer.After(2, function()
 					StaticPopup_Show("WR_TOUR_OFFER")
 				end)
@@ -56,6 +57,14 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
 					end
 				end)
 			end
+		end
+
+		-- existing users never saw the new-install offer: once, on top of the patch notes
+		if not ns.WasTourOffered() then
+			ns.MarkTourOffered()
+			C_Timer.After(2, function()
+				StaticPopup_Show("WR_TOUR_OFFER_EXISTING")
+			end)
 		end
 	end
 end)

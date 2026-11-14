@@ -158,6 +158,15 @@ function ns.SetLastSeenVersion(version)
 	db.lastSeenVersion = version
 end
 
+-- the tour is offered once per account, new install or existing user
+function ns.WasTourOffered()
+	return db.tourOffered == true
+end
+
+function ns.MarkTourOffered()
+	db.tourOffered = true
+end
+
 function ns.GetPlayerRecord(key, create)
 	local record = db.players[key]
 	if not record and create then

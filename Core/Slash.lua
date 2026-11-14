@@ -200,6 +200,8 @@ SlashCmdList["WR"] = function(msg)
 	elseif cmd == "tour" then
 		if rest == "offer" then
 			StaticPopup_Show("WR_TOUR_OFFER")
+		elseif rest == "offer existing" then
+			StaticPopup_Show("WR_TOUR_OFFER_EXISTING")
 		else
 			ns.StartTour(rest ~= "" and rest or "basics")
 		end
