@@ -763,28 +763,22 @@ function ns.BuildHistoryPanel(parent)
 		refresh = ns.RefreshHistory,
 		parent = parent,
 		rows = { filterBar, charBar, classRaceBar },
-		top = -4, left = 12, right = -12,
-		groups = {
-			{
-				{ id = "search", pieces = { { filterBar.searchBox } } },
-				dropdownUnit("standing", top[1], signFilter),
-				dropdownUnit("source", top[2], sourceFilter),
-				{ id = "notesOnly", pieces = { { notesCheck }, { notesCheck.label, 2 } }, clear = function()
-					notesOnly = false; notesCheck:SetChecked(false)
-				end },
-			},
-			{
-				{ id = "character", pieces = { { charBar.dropdowns[1] }, { charCheck, 6 }, { charCheck.label, 2 } }, clear = function()
-					characterFilter:Clear(); charBar.dropdowns[1]:RefreshText()
-					currentCharOnly = false; charCheck:SetChecked(false)
-				end },
-			},
-			{
-				dropdownUnit("class", bottom[1], classFilter),
-				dropdownUnit("body", bottom[2], sexFilter),
-				dropdownUnit("race", bottom[3], raceFilter),
-				dropdownUnit("faction", bottom[4], factionFilter),
-			},
+		top = -4, inset = 12,
+		left = {
+			{ id = "search", pieces = { { filterBar.searchBox } } },
+			dropdownUnit("standing", top[1], signFilter),
+			dropdownUnit("source", top[2], sourceFilter),
+			{ id = "notesOnly", pieces = { { notesCheck }, { notesCheck.label, 2 } }, clear = function()
+				notesOnly = false; notesCheck:SetChecked(false)
+			end },
+			{ id = "character", pieces = { { charBar.dropdowns[1] }, { charCheck, 6 }, { charCheck.label, 2 } }, clear = function()
+				characterFilter:Clear(); charBar.dropdowns[1]:RefreshText()
+				currentCharOnly = false; charCheck:SetChecked(false)
+			end },
+			dropdownUnit("class", bottom[1], classFilter),
+			dropdownUnit("body", bottom[2], sexFilter),
+			dropdownUnit("race", bottom[3], raceFilter),
+			dropdownUnit("faction", bottom[4], factionFilter),
 		},
 		right = {
 			{ id = "count", row = 1, pieces = { { countLabel } } },

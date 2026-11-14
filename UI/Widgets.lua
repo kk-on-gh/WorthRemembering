@@ -535,9 +535,9 @@ end
 
 -- Re-flows filter controls across as many rows as the width needs. Reuses spec.rows
 -- (the tab's existing filter bars) as row frames and adds more if a narrow window needs
--- them. Left units flow left to right; a group moves to a new row whole when it fits
--- there, otherwise it wraps unit by unit. Right units stay right-aligned in order,
--- each on its preferred row (unit.row), clamped to the rows in use.
+-- them. Left units flow left to right one at a time. Right units stay right-aligned in
+-- order; each layout picks the spread across rows closest to their preferred rows
+-- (unit.row) that leaves no row without a left unit.
 -- unit = { id, pieces = { { region }, { region, gapBefore }, ... }, clear = fn? }
 local FLOW_ROW_HEIGHT, FLOW_ROW_STEP, FLOW_PAD, FLOW_GAP, FLOW_SIDE_GAP, FLOW_MAX_ROWS = 28, 30, 8, 10, 16, 8
 
@@ -556,12 +556,29 @@ local function flowUnitWidth(unit)
 	return w
 end
 
+-- calls fn with every non-decreasing row assignment of n units across maxRows rows
+local function eachAssignment(n, maxRows, fn)
+	local assign = {}
+	local function step(i, minRow)
+		if i > n then
+			fn(assign)
+			return
+		end
+		for r = minRow, maxRows do
+			assign[i] = r
+			step(i + 1, r)
+		end
+	end
+	step(1, 1)
+end
+
 ns.FILTER_FLOWS = {}
 
 function ns.CreateFilterReflow(spec)
 	local flow = { hidden = {} }
 	local rows = spec.rows
 	local rowCount, lastWidth = 0, nil
+	local widths = {}
 
 	local function getRow(i)
 		if not rows[i] then
@@ -573,50 +590,78 @@ function ns.CreateFilterReflow(spec)
 		return rows[i]
 	end
 
-	local function plan(width, maxRows, force, breakGroups)
-		local rightWidth, rightPlan = {}, {}
+	local function plan(width, maxRows, assign, force)
+		local rightWidth = {}
 		for r = 1, maxRows do
 			rightWidth[r] = 0
 		end
-		for _, unit in ipairs(spec.right) do
-			local r = math.min(unit.row or 1, maxRows)
-			rightPlan[#rightPlan + 1] = { unit = unit, row = r }
-			rightWidth[r] = rightWidth[r] + (rightWidth[r] > 0 and FLOW_GAP or 0) + flowUnitWidth(unit)
+		for i, unit in ipairs(spec.right) do
+			local r = assign[i]
+			rightWidth[r] = rightWidth[r] + (rightWidth[r] > 0 and FLOW_GAP or 0) + widths[unit]
 		end
 		local function avail(r)
-			if r > maxRows then
-				return force and math.huge or -1
-			end
 			return width - 2 * FLOW_PAD - rightWidth[r] - (rightWidth[r] > 0 and FLOW_SIDE_GAP or 0)
 		end
 
-		local leftPlan = {}
-		local r, x = 1, 0
-		for _, group in ipairs(spec.groups) do
-			local units, groupWidth = {}, 0
-			for _, unit in ipairs(group) do
-				if not flow.hidden[unit.id] then
-					local w = flowUnitWidth(unit)
-					units[#units + 1] = { unit = unit, w = w }
-					groupWidth = groupWidth + (#units > 1 and FLOW_GAP or 0) + w
-				end
-			end
-			if #units > 0 and x > 0 and (breakGroups or x + FLOW_GAP + groupWidth > avail(r)) then
-				r, x = r + 1, 0
-			end
-			for _, u in ipairs(units) do
-				if x > 0 and x + FLOW_GAP + u.w > avail(r) then
+		local leftPlan, r, x = {}, 1, 0
+		for _, unit in ipairs(spec.left) do
+			if not flow.hidden[unit.id] then
+				local w = widths[unit]
+				if x > 0 and x + FLOW_GAP + w > avail(r) then
 					r, x = r + 1, 0
 				end
-				if r > maxRows and not force then
-					return nil
+				if r > maxRows then
+					if not force then
+						return nil
+					end
+					r = maxRows
 				end
 				local ux = x > 0 and x + FLOW_GAP or 0
-				leftPlan[#leftPlan + 1] = { unit = u.unit, row = math.min(r, maxRows), x = ux }
-				x = ux + u.w
+				leftPlan[#leftPlan + 1] = { unit = unit, row = r, x = ux }
+				x = ux + w
 			end
 		end
-		return leftPlan, rightPlan, x > 0 and r or r - 1
+		return leftPlan, x > 0 and r or r - 1
+	end
+
+	local function choose(width)
+		for n = 1, FLOW_MAX_ROWS do
+			local best
+			eachAssignment(#spec.right, n, function(assign)
+				local leftPlan, leftRows = plan(width, n, assign)
+				if not leftPlan then
+					return
+				end
+				local used = {}
+				for _, p in ipairs(leftPlan) do
+					used[p.row] = true
+				end
+				for _, r in ipairs(assign) do
+					used[r] = true
+				end
+				for r = 1, n do
+					if not used[r] then
+						return
+					end
+				end
+				-- prefer a left unit on the last row, then right units near their usual rows
+				local score = leftRows == n and 0 or 1000
+				for i, unit in ipairs(spec.right) do
+					score = score + math.abs(assign[i] - math.min(unit.row or 1, n))
+				end
+				if not best or score < best.score then
+					best = { score = score, leftPlan = leftPlan, assign = { unpack(assign) }, rows = n }
+				end
+			end)
+			if best then
+				return best
+			end
+		end
+		local assign = {}
+		for i, unit in ipairs(spec.right) do
+			assign[i] = math.min(unit.row or 1, FLOW_MAX_ROWS)
+		end
+		return { leftPlan = (plan(width, FLOW_MAX_ROWS, assign, true)), assign = assign, rows = FLOW_MAX_ROWS }
 	end
 
 	function flow.Layout(force)
@@ -626,47 +671,35 @@ function ns.CreateFilterReflow(spec)
 		end
 		lastWidth = width
 
-		for _, group in ipairs(spec.groups) do
-			for _, unit in ipairs(group) do
-				for _, piece in ipairs(unit.pieces) do
-					piece[1]:SetShown(not flow.hidden[unit.id])
-				end
+		for _, unit in ipairs(spec.left) do
+			local shown = not flow.hidden[unit.id]
+			for _, piece in ipairs(unit.pieces) do
+				piece[1]:SetShown(shown)
 			end
+			widths[unit] = flowUnitWidth(unit)
+		end
+		for _, unit in ipairs(spec.right) do
+			widths[unit] = flowUnitWidth(unit)
 		end
 
-		local needed, leftPlan, rightPlan, leftRows = FLOW_MAX_ROWS, nil, nil, 0
-		for n = 1, FLOW_MAX_ROWS do
-			leftPlan, rightPlan, leftRows = plan(width, n)
-			if leftPlan then
-				needed = n
-				break
-			end
-		end
-		if not leftPlan then
-			leftPlan, rightPlan = plan(width, FLOW_MAX_ROWS, true)
-		elseif leftRows < needed then
-			-- a row with only right-side buttons looks broken: spread the groups out instead
-			local spreadLeft, spreadRight = plan(width, needed, false, true)
-			if spreadLeft then
-				leftPlan, rightPlan = spreadLeft, spreadRight
-			end
-		end
+		local result = choose(width)
+		local needed = result.rows
 
 		for i = 1, needed do
 			local row = getRow(i)
 			local y = spec.top - (i - 1) * FLOW_ROW_STEP
 			row:ClearAllPoints()
-			row:SetPoint("TOPLEFT", spec.parent, "TOPLEFT", spec.left, y)
-			row:SetPoint("TOPRIGHT", spec.parent, "TOPRIGHT", spec.right, y)
+			row:SetPoint("TOPLEFT", spec.parent, "TOPLEFT", spec.inset, y)
+			row:SetPoint("TOPRIGHT", spec.parent, "TOPRIGHT", -spec.inset, y)
 			row:Show()
 		end
 		for i = needed + 1, #rows do
 			rows[i]:Hide()
 		end
 
-		for _, p in ipairs(leftPlan) do
+		for _, p in ipairs(result.leftPlan) do
 			local row, prev = rows[p.row], nil
-			for i, piece in ipairs(p.unit.pieces) do
+			for _, piece in ipairs(p.unit.pieces) do
 				local region = piece[1]
 				region:SetParent(row)
 				region:ClearAllPoints()
@@ -680,9 +713,10 @@ function ns.CreateFilterReflow(spec)
 		end
 
 		local rightByRow = {}
-		for _, p in ipairs(rightPlan) do
-			rightByRow[p.row] = rightByRow[p.row] or {}
-			table.insert(rightByRow[p.row], p.unit)
+		for i, unit in ipairs(spec.right) do
+			local r = result.assign[i]
+			rightByRow[r] = rightByRow[r] or {}
+			table.insert(rightByRow[r], unit)
 		end
 		for r, units in pairs(rightByRow) do
 			local row, rx = rows[r], FLOW_PAD
@@ -699,7 +733,7 @@ function ns.CreateFilterReflow(spec)
 					end
 					nextRegion = region
 				end
-				rx = rx + flowUnitWidth(unit) + FLOW_GAP
+				rx = rx + widths[unit] + FLOW_GAP
 			end
 		end
 
@@ -714,15 +748,13 @@ function ns.CreateFilterReflow(spec)
 	-- returns true if hiding cleared an active filter, so the caller refreshes
 	function flow.SetHidden(hiddenSet, initial)
 		local cleared = false
-		for _, group in ipairs(spec.groups) do
-			for _, unit in ipairs(group) do
-				local hide = hiddenSet[unit.id] == true
-				if hide and not flow.hidden[unit.id] and not initial and unit.clear then
-					unit.clear()
-					cleared = true
-				end
-				flow.hidden[unit.id] = hide or nil
+		for _, unit in ipairs(spec.left) do
+			local hide = hiddenSet[unit.id] == true
+			if hide and not flow.hidden[unit.id] and not initial and unit.clear then
+				unit.clear()
+				cleared = true
 			end
+			flow.hidden[unit.id] = hide or nil
 		end
 		flow.Layout(true)
 		return cleared

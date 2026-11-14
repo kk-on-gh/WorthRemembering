@@ -782,7 +782,10 @@ local function buildFiltersBox(parent, y)
 					end
 				end
 				return count == 0 and "All shown" or (count .. " hidden")
-			end, 160)
+			end, 160, "Show all", function()
+				wipe(hidden)
+				ns.ApplyHiddenFilters(def.tab)
+			end)
 		dropdown:SetPoint("LEFT", labels[i], "LEFT", labelWidth + 10, 0)
 		ns.AttachHookTooltip(dropdown, "Uncheck a filter to hide it from the " .. def.label .. "'s filter bar. Hiding a filter also clears it.")
 	end
