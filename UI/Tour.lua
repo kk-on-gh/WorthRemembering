@@ -88,7 +88,7 @@ ns.TOURS = {
 			text = "\"Hold for\" keeps players listed for a few seconds after they leave view, so they don't flicker in and out.\n\nClicking or double-clicking a row can now target them (out of combat).",
 		},
 		{
-			page = "general", box = "Danger Zone", side = "right", marks = { "options.danger.clear ignored", "options.danger.reset ui" },
+			page = "general", box = "Danger Zone", side = "right",
 			title = "Danger zone",
 			text = "Clear Ignored empties your ignore list in one go. Reset UI now resets hidden filters too.",
 		},

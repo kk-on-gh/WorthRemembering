@@ -50,13 +50,29 @@ end
 -- a "what's new" tour (ns.TOURS["v<version>"]) gets a button in its section, for the
 -- newest three versions only: older tours point at UI that may have moved since
 local FEATURE_TOUR_VERSIONS = 3
--- versions whose button glowed this session; it keeps glowing through relayouts
-local glowingThisSession = {}
+-- versions whose button is glowing right now. it glows once: from first sight until
+-- it's hovered or the About tab is left (tab change or window closed)
+local glowing = {}
+local glowFrames = {}
+
+local function stopGlow(version)
+	glowing[version] = nil
+	if glowFrames[version] then
+		glowFrames[version]:Hide()
+		glowFrames[version] = nil
+	end
+end
+
+local function stopAllGlows()
+	for version in pairs(glowing) do
+		stopGlow(version)
+	end
+end
 
 local function addGlow(button)
 	local ok, glow = pcall(CreateFrame, "Frame", nil, button, "GlowBoxTemplate")
 	if not ok then
-		return
+		return nil
 	end
 	for _, key in ipairs({ "BG", "ShadowTopLeft", "ShadowTopRight", "ShadowBottomLeft", "ShadowBottomRight",
 		"ShadowTop", "ShadowBottom", "ShadowLeft", "ShadowRight" }) do
@@ -74,6 +90,7 @@ local function addGlow(button)
 	fade:SetToAlpha(0.25)
 	fade:SetDuration(0.9)
 	pulse:Play()
+	return glow
 end
 
 local function addVersionBlock(index, entry, y)
@@ -105,10 +122,14 @@ local function addVersionBlock(index, entry, y)
 		tourButton:SetPoint("TOPLEFT", 16, y - 2)
 		tourButton:SetText("Tour what's new in " .. entry.version)
 		tourButton:SetScript("OnClick", function() ns.StartTour(tourId) end)
-		if glowingThisSession[entry.version] or not ns.WasFeatureTourSeen(entry.version) then
-			glowingThisSession[entry.version] = true
-			ns.MarkFeatureTourSeen(entry.version)
-			addGlow(tourButton)
+		local version = entry.version
+		if not ns.WasFeatureTourSeen(version) then
+			ns.MarkFeatureTourSeen(version)
+			glowing[version] = true
+		end
+		if glowing[version] then
+			glowFrames[version] = addGlow(tourButton)
+			tourButton:HookScript("OnEnter", function() stopGlow(version) end)
 		end
 		y = y - 30
 	end
@@ -166,6 +187,7 @@ end
 function ns.BuildAboutPanel(parent)
 	local PAD = 20
 	expandMissedVersions()
+	parent:HookScript("OnHide", stopAllGlows)
 
 	local header = CreateFrame("Frame", nil, parent)
 	header:SetPoint("TOPLEFT", PAD, -PAD)
