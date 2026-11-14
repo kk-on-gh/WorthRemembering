@@ -977,6 +977,7 @@ local function createTabs()
 		tab:SetScript("OnClick", function(self) setTab(self:GetID()) end)
 		prevTab = tab
 		tabs[i] = tab
+		ns.RegisterTourTarget("tab." .. label:lower(), tab)
 	end
 
 	if PanelTemplates_SetNumTabs then
@@ -1246,7 +1247,7 @@ local function createPlayersContent()
 	local function dropdownUnit(id, dropdown, filter)
 		return { id = id, pieces = { { dropdown } }, clear = function() filter:Clear(); dropdown:RefreshText() end }
 	end
-	ns.CreateFilterReflow({
+	local flow = ns.CreateFilterReflow({
 		tab = "players",
 		refresh = ns.RefreshOverview,
 		parent = content,
@@ -1282,6 +1283,8 @@ local function createPlayersContent()
 			playersTable.container:SetPoint("BOTTOMRIGHT", -12, 0)
 		end,
 	})
+	ns.RegisterTourTarget("players.table", playersTable.container)
+	ns.RegisterTourTarget("players.filters", function() return { filterBar, flow.LastRow() } end)
 end
 
 -- window position/size are saved on every move/resize and restored at creation,
@@ -1691,6 +1694,21 @@ function ns.SelectOptionsTab()
 	restoreIfMinimized()
 	if mainFrame.selectedTab ~= 5 then
 		setTab(5)
+	end
+end
+
+local TAB_INDEX = { players = 1, history = 2, details = 3, statistics = 4, options = 5, about = 6 }
+
+function ns.SelectMainTab(name)
+	local index = TAB_INDEX[name]
+	if not index then
+		return
+	end
+	ns.EnsureMainFrame()
+	ns.ShowOverview()
+	restoreIfMinimized()
+	if mainFrame.selectedTab ~= index then
+		setTab(index)
 	end
 end
 

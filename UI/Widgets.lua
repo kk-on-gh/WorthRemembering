@@ -563,6 +563,14 @@ local function flowUnitWidth(unit)
 	return w
 end
 
+-- frames the tour points at, filled in as each panel builds (UI/Tour.lua)
+ns.tourTargets = {}
+
+-- target: a frame, { topLeftFrame, bottomRightFrame }, or a function returning either
+function ns.RegisterTourTarget(name, target)
+	ns.tourTargets[name] = target
+end
+
 ns.FILTER_FLOWS = {}
 
 function ns.CreateFilterReflow(spec)
@@ -718,6 +726,10 @@ function ns.CreateFilterReflow(spec)
 				spec.onRowsChanged(needed)
 			end
 		end
+	end
+
+	function flow.LastRow()
+		return rows[math.max(rowCount, 1)]
 	end
 
 	-- returns true if hiding cleared an active filter, so the caller refreshes

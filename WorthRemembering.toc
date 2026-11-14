@@ -38,3 +38,4 @@ UI/Statistics.lua
 UI/NearbyWindow.lua
 UI/Options.lua
 UI/About.lua
+UI/Tour.lua

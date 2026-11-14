@@ -43,7 +43,11 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
 			-- nil on a fresh install, so the About tab only expands what's actually new
 			ns.UpdatedFromVersion = lastSeen
 			ns.SetLastSeenVersion(version)
-			if ns.GetSettings().showPatchNotesOnUpdate then
+			if lastSeen == nil and #ns.GetAllPlayerKeys() == 0 then
+				C_Timer.After(2, function()
+					StaticPopup_Show("WR_TOUR_OFFER")
+				end)
+			elseif ns.GetSettings().showPatchNotesOnUpdate then
 				C_Timer.After(1, function()
 					local shown, showErr = pcall(ns.SelectAboutTab)
 					if not shown then

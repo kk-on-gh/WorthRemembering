@@ -22,6 +22,7 @@ local function printUsage()
 	print("  /wr rep <name> <delta>  - add a standing-change entry")
 	print("  /wr show <name>         - print a player's record")
 	print("  /wr list                - print all notable player keys")
+	print("  /wr tour                - take the tour of the basics")
 	print("  /wr testsurvey [count]  - test the survey (and its confirm prompt) with fake data (default 4, e.g. 40 for a raid)")
 end
 
@@ -196,6 +197,12 @@ SlashCmdList["WR"] = function(msg)
 		cmdList()
 	elseif cmd == "testsurvey" then
 		cmdTestSurvey(rest)
+	elseif cmd == "tour" then
+		if rest == "offer" then
+			StaticPopup_Show("WR_TOUR_OFFER")
+		else
+			ns.StartTour(rest ~= "" and rest or "basics")
+		end
 	else
 		printUsage()
 	end

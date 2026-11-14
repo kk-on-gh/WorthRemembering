@@ -152,6 +152,13 @@ function ns.BuildAboutPanel(parent)
 	patchCheckLabel:SetText("Show patch notes for new versions")
 	ns.AttachTooltip(patchCheck, "Opens this tab once after Worth Remembering updates to a new version.")
 
+	local tourButton = CreateFrame("Button", nil, header, "UIPanelButtonTemplate")
+	tourButton:SetSize(120, 20)
+	tourButton:SetPoint("LEFT", patchCheckLabel, "RIGHT", 16, 0)
+	tourButton:SetText("Take the Tour")
+	tourButton:SetScript("OnClick", function() ns.StartTour("basics") end)
+	ns.AttachHookTooltip(tourButton, "A quick walk through the basics, about two minutes.")
+
 	-- wraps to whatever width the window allows; everything below anchors to its bottom
 	-- so a narrow window just pushes the patch notes down
 	local welcome = header:CreateFontString(nil, "ARTWORK", "GameFontHighlight")

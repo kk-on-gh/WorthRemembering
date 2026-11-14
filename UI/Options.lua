@@ -3645,6 +3645,7 @@ function ns.BuildOptionsPanel(parent)
 		end
 		button:SetScript("OnClick", function() selectSubTab(i) end)
 		buttons[i] = button
+		ns.RegisterTourTarget("options.sub." .. def.label:lower(), button)
 		prevButton = button
 
 		local content = CreateFrame("Frame", nil, parent)
@@ -3657,4 +3658,5 @@ function ns.BuildOptionsPanel(parent)
 	end
 
 	selectSubTab(1)
+	ns.SelectOptionsSubTab = selectSubTab
 end
