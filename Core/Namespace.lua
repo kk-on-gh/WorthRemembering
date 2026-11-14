@@ -872,14 +872,13 @@ function ns.StandingColor(standing, band)
 	return c[1], c[2], c[3]
 end
 
--- Falls back to white when class is unknown (legacy records, or a manual entry that was
--- never matched to a live unit).
+-- gray when class is unknown (added from chat, never seen in the world): white is Priest
 function ns.ClassColor(classFile)
 	local c = classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
 	if c then
 		return c.r, c.g, c.b
 	end
-	return 1, 1, 1
+	return 0.65, 0.65, 0.65
 end
 
 function ns.FactionColor(faction)
