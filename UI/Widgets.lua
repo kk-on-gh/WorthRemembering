@@ -78,6 +78,20 @@ local function applySmallBackdrop(frame)
 	end
 end
 
+-- same rounding problem for checkbox art: an edge goes thin or vanishes at fractional
+-- positions (dragged column widths, UI scale)
+function ns.UnsnapCheckbox(btn)
+	local textures = { btn:GetNormalTexture(), btn:GetPushedTexture(), btn:GetHighlightTexture(),
+		btn:GetCheckedTexture(), btn:GetDisabledCheckedTexture() }
+	for i = 1, 5 do
+		local tex = textures[i]
+		if tex and tex.SetSnapToPixelGrid then
+			tex:SetSnapToPixelGrid(false)
+			tex:SetTexelSnappingBias(0)
+		end
+	end
+end
+
 local smallTooltip
 local SMALL_TOOLTIP_MAX_WIDTH = 260
 
@@ -153,6 +167,7 @@ function ns.CreateSmallCheckbox(parent, size, checked, onClick)
 	btn:SetCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check")
 	btn:SetDisabledCheckedTexture("Interface\\Buttons\\UI-CheckBox-Check-Disabled")
 	btn:SetChecked(checked)
+	ns.UnsnapCheckbox(btn)
 	btn:SetScript("OnClick", function(self)
 		onClick(self:GetChecked() and true or false)
 	end)
@@ -424,6 +439,7 @@ function ns.CreateFilterBar(parent, config)
 		local check = CreateFrame("CheckButton", nil, bar, "UICheckButtonTemplate")
 		check:SetSize(20, 20)
 		check:SetChecked(cc.initial)
+		ns.UnsnapCheckbox(check)
 		check:SetPoint("LEFT", prevWidget or bar, prevWidget and "RIGHT" or "LEFT", prevWidget and 6 or 8, 0)
 		check:SetScript("OnClick", function(self)
 			cc.onChange(self:GetChecked() and true or false)
@@ -490,6 +506,7 @@ function ns.CreateFilterBar(parent, config)
 		local check = CreateFrame("CheckButton", nil, bar, "UICheckButtonTemplate")
 		check:SetSize(20, 20)
 		check:SetChecked(rc.initial)
+		ns.UnsnapCheckbox(check)
 		check:SetPoint("RIGHT", label, "LEFT", -2, 0)
 		check:SetScript("OnClick", function(self)
 			rc.onChange(self:GetChecked() and true or false)
@@ -956,6 +973,7 @@ function ns.CreateSortableTable(parent, config)
 					local check = CreateFrame("CheckButton", nil, cell, "UICheckButtonTemplate")
 					check:SetSize(18, 18)
 					check:SetPoint("LEFT", 0, 0)
+					ns.UnsnapCheckbox(check)
 					check:SetScript("OnClick", function(self)
 						if col.onCheckboxClick then
 							col.onCheckboxClick(row.item, self:GetChecked() and true or false)
