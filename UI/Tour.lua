@@ -181,7 +181,7 @@ local targets = ns.tourTargets
 
 local BOX_WIDTH, PAD, ARROW_GAP = 300, 14, 26
 local ARROW_FILE = "Interface\\TalentFrame\\TalentFrame-Parts"
-local ROTATION = { up = 180, down = 0, left = 270, right = 90 }
+local ROTATION = { up = 180, down = 0, left = 90, right = 270 }
 -- side the box sits on -> direction its arrow points
 local ARROW_DIR = { below = "up", above = "down", right = "left", left = "right" }
 
