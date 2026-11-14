@@ -216,8 +216,10 @@ local ACTIVITY_TILES = {
 	{ label = "Entries This Year", getValue = function(s) return s.entriesYear end },
 }
 local REP_TILES = {
-	{ label = "Total Positive Standing Given", getValue = function(s) return "+" .. s.totalPositive end, color = function() return ns.StandingColor(1, 0) end },
-	{ label = "Total Negative Standing Given", getValue = function(s) return "-" .. s.totalNegative end, color = function() return ns.StandingColor(-1, 0) end },
+	{ label = "Total Positive Standing Given", getValue = function(s) return "+" .. s.totalPositive end, color = function() return ns.StandingColor(1, 0) end,
+		onClick = function() ns.FilterHistoryBySign("positive") end },
+	{ label = "Total Negative Standing Given", getValue = function(s) return "-" .. s.totalNegative end, color = function() return ns.StandingColor(-1, 0) end,
+		onClick = function() ns.FilterHistoryBySign("negative") end },
 	{
 		label = "Net Standing",
 		getValue = function(s) return s.totalPositive - s.totalNegative end,

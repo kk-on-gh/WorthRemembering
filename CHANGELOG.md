@@ -9,6 +9,7 @@ All notable changes to Worth Remembering are documented here.
 - A new "Filters" box in Options > General: choose which filters the Players and History tabs show. Hiding a filter also clears it.
 
 ### Changed
+- Statistics: clicking Total Positive or Total Negative Standing Given opens the History tab filtered to just those changes.
 - The Players and History filter bars now rearrange to fit: fewer rows when filters are hidden, and controls wrap onto another row instead of overlapping in a narrow window.
 - Players whose class isn't known yet (e.g. added by right-clicking their name in chat before ever seeing them) now show in gray instead of white, which is the Priest color.
 - Minor UI adjustments

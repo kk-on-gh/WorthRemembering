@@ -555,6 +555,17 @@ function ns.FilterHistoryByPlayer(key)
 	ns.RefreshHistory()
 end
 
+-- deep-link from Statistics: History filtered to only positive or negative changes
+function ns.FilterHistoryBySign(sign)
+	ns.SelectHistoryTab()
+	resetAllHistoryFilters()
+	signFilter:Set(sign)
+	if filterBar and filterBar.dropdowns[1] then
+		filterBar.dropdowns[1]:RefreshText()
+	end
+	ns.RefreshHistory()
+end
+
 function ns.BuildHistoryPanel(parent)
 	filterBar = ns.CreateFilterBar(parent, {
 		search = { onChange = function(text) search = text; ns.RefreshHistory() end },
