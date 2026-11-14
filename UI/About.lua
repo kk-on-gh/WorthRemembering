@@ -232,6 +232,7 @@ function ns.BuildAboutPanel(parent)
 	settingsTourButton:SetText("Settings Tour")
 	settingsTourButton:SetScript("OnClick", function() ns.StartTour("settings") end)
 	ns.AttachHookTooltip(settingsTourButton, "A walk through the Options pages and the settings worth knowing about.")
+	ns.RegisterTourTarget("about.tours", { tourButton, settingsTourButton })
 
 	-- wraps to whatever width the window allows; everything below anchors to its bottom
 	-- so a narrow window just pushes the patch notes down

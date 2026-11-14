@@ -75,7 +75,12 @@ ns.TOURS = {
 	["v1.2"] = {
 		{
 			title = "What's new in 1.2",
-			text = "A quick look at what's new. The tours themselves are new too: the basics and settings tours are on the About tab any time.",
+			text = "A quick look at what's new.",
+		},
+		{
+			tab = "about", target = "about.tours", side = "below",
+			title = "Tours",
+			text = "Tours are new too! The basics tour walks through the main window and adding notes, and the settings tour through the Options pages worth knowing about. Take either one any time.",
 		},
 		{
 			page = "general", box = "Filters", side = "right",
