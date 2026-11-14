@@ -394,7 +394,7 @@ end
 -- which each window treats as "never moved/resized"
 local UI_SETTING_KEYS = {
 	"windowPoint", "windowRelativePoint", "windowX", "windowY", "windowWidth", "windowHeight",
-	"windowAlpha", "uiScale", "columnWidths", "columnVisibility", "columnOrder", "windowPositions",
+	"windowAlpha", "uiScale", "columnWidths", "columnVisibility", "columnOrder", "hiddenFilters", "windowPositions",
 	"hidePlayersStandingButtons", "hidePlayersNewButton", "multiSelectEnabled",
 	"nearbyWindowEnabled", "nearbyPoint", "nearbyScale", "nearbyIdleAlpha", "nearbyHoverAlpha",
 	"nearbyGrowDirection", "nearbyVisibleRowLimit",

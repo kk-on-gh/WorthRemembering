@@ -5,6 +5,7 @@ All notable changes to Worth Remembering are documented here.
 ## [1.1.1]
 
 ### Added
+- "Clear Ignored" in Options > General > Danger Zone: empties your ignore list (the guild and friend rules are kept).
 - A new "Filters" box in Options > General: choose which filters the Players and History tabs show. Hiding a filter also clears it.
 
 ### Changed

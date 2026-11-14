@@ -8,6 +8,7 @@ ns.CHANGELOG = {
 		version = "1.1.1", date = "2026-11-14", shipped = false,
 		sections = {
 			{ heading = "Added", items = {
+				"\"Clear Ignored\" in Options > General > Danger Zone: empties your ignore list (the guild and friend rules are kept).",
 				"A new \"Filters\" box in Options > General: choose which filters the Players and History tabs show. Hiding a filter also clears it.",
 			}},
 			{ heading = "Changed", items = {

@@ -45,12 +45,26 @@ StaticPopupDialogs["WR_CONFIRM_RESET_CUSTOM_BRACKETS"] = {
 }
 
 StaticPopupDialogs["WR_CONFIRM_RESET_UI"] = {
-	text = "Reset every Worth Remembering window (position, size, scale, opacity, visibility), column layouts, Nearby window layout, minimap button, and nameplate icon size/offset? Your UI will reload.",
+	text = "Reset every Worth Remembering window (position, size, scale, opacity, visibility), column layouts, hidden filters, Nearby window layout, minimap button, and nameplate icon size/offset? Your UI will reload.",
 	button1 = "Reset UI",
 	button2 = "Cancel",
 	OnAccept = function()
 		ns.ResetUISettings()
 		ReloadUI()
+	end,
+	timeout = 0,
+	whileDead = true,
+	hideOnEscape = true,
+	preferredIndex = 3,
+}
+
+StaticPopupDialogs["WR_CONFIRM_CLEAR_IGNORED"] = {
+	text = "Remove all %d players from your ignore list? Your guild and friend ignore rules are kept.",
+	button1 = "Clear",
+	button2 = "Cancel",
+	OnAccept = function()
+		wipe(ns.GetIgnoreList())
+		ns.OnIgnoreChanged()
 	end,
 	timeout = 0,
 	whileDead = true,
@@ -1051,10 +1065,19 @@ local dangerZoneExpanded = false
 
 local DANGER_ZONE_ACTIONS = {
 	{ text = "Reset UI", popup = "WR_CONFIRM_RESET_UI",
-		hint = "Every window's position, size, scale, opacity, and layout, plus columns and the minimap button. Reloads your UI." },
+		hint = "Every window's position, size, scale, opacity, and layout, plus columns, hidden filters, and the minimap button. Reloads your UI." },
 	{ text = "Reset All Options", popup = "WR_CONFIRM_RESET_OPTIONS",
-		hint = "Puts every option back to its default. Your players, notes, and standings are kept. Reloads your UI." },
-	{ text = "Clear Non-Notable", popup = "WR_CONFIRM_CLEAR_NONNOTABLE", countNonNotable = true,
+		hint = "Puts every option back to its default. Your players, notes, standings, and ignore list are kept. Reloads your UI." },
+	{ text = "Clear Ignored", popup = "WR_CONFIRM_CLEAR_IGNORED",
+		count = function()
+			local n = 0
+			for _ in pairs(ns.GetIgnoreList()) do
+				n = n + 1
+			end
+			return n
+		end,
+		hint = "Empties your ignore list (Options > Ignore). The guild and friend rules are kept." },
+	{ text = "Clear Non-Notable", popup = "WR_CONFIRM_CLEAR_NONNOTABLE", count = function() return ns.CountNonNotablePlayers() end,
 		hint = "Deletes players with exactly 0 standing and no notes (e.g. bare auto-tracked entries)." },
 	{ text = "Clear Database", popup = "WR_CONFIRM_CLEAR_DATABASE",
 		hint = "Deletes every note and standing for every player, on every character. Cannot be undone." },
@@ -1081,8 +1104,8 @@ local function buildDangerZoneBox(parent, y, onToggle)
 			button:SetText(action.text)
 			button:SetPoint("TOPLEFT", 10, rowY)
 			button:SetScript("OnClick", function()
-				if action.countNonNotable then
-					StaticPopup_Show(action.popup, ns.CountNonNotablePlayers())
+				if action.count then
+					StaticPopup_Show(action.popup, action.count())
 				else
 					StaticPopup_Show(action.popup)
 				end
