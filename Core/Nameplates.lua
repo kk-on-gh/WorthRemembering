@@ -38,13 +38,30 @@ end
 -- be tuned without a real notable player nearby. toggled from Options
 local previewMode = false
 
+function ns.IsNameplateIconPreview()
+	return previewMode
+end
+
+local refreshPlateIcon
+
 function ns.SetNameplateIconPreview(enabled)
 	previewMode = enabled and true or false
+	-- every plate on screen, NPCs included: visibleUnits only tracks players, and with
+	-- friendly player plates off (the default) there may be none of those
+	local ok, plates = pcall(C_NamePlate.GetNamePlates)
+	if ok and plates then
+		for _, plate in ipairs(plates) do
+			local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
+			if unit then
+				refreshPlateIcon(unit)
+			end
+		end
+	end
 	ns.RefreshNameplateIcons()
 end
 
 -- re-derives icon visibility/color/position for whatever's on this plate now
-local function refreshPlateIcon(unit)
+function refreshPlateIcon(unit)
 	if not unit then
 		return
 	end
