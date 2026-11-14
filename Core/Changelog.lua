@@ -8,7 +8,7 @@ ns.CHANGELOG = {
 		version = "1.2", date = "2026-11-14", shipped = false,
 		sections = {
 			{ heading = "Added", items = {
-				"Two guided tours, started from the About tab (or /wr tour): a basics tour of the main window and how to add notes, and a settings tour that opens and walks through the Options pages worth knowing about. New installs are offered the basics tour on first login.",
+				"Two guided tours, started from the About tab (or /wr tour): a basics tour of the main window and how to add notes, and a settings tour that opens and walks through the Options pages worth knowing about. New installs are offered the basics tour on first login. Patch notes for recent versions also get a \"what's new\" tour button that walks through that version's new features.",
 				"New installs start with a \"Demo Player\" record, so the Players, History, and Details tabs have something to show. Taking a tour adds it for the length of the tour if you don't have one.",
 				"\"Hold for (s)\" in Options > General > Nearby Window: keeps a player in the Nearby window for that many seconds after their nameplate goes away, faded out. Coming back within that time doesn't alert again. Off (0) by default.",
 				"\"Target\" as a single- or double-click action for the Nearby window's rows (Options > General > Nearby Window). Out of combat only, since the game doesn't let addons target during combat; there a Target click does nothing.",
