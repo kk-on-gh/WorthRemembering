@@ -5,6 +5,17 @@ local ns = WorthRemembering
 -- updated. most recent entry first.
 ns.CHANGELOG = {
 	{
+		version = "1.1.1", date = "2026-11-14", shipped = false,
+		sections = {
+			{ heading = "Changed", items = {
+				"Minor UI adjustments",
+			}},
+			{ heading = "Fixed", items = {
+				"On the Players tab, the ignore status filter could overlap the Columns dropdown when the window was narrow. It's now on the row above, after \"Invert\".",
+			}},
+		},
+	},
+	{
 		version = "1.1", date = "2026-11-13", shipped = true,
 		sections = {
 			{ heading = "Added", items = {

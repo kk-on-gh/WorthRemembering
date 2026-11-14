@@ -432,6 +432,9 @@ function ns.CreateFilterBar(parent, config)
 		local label = bar:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 		label:SetPoint("LEFT", check, "RIGHT", 2, 0)
 		label:SetText(cc.label)
+		if cc.tooltip then
+			ns.AttachHookTooltip(check, cc.tooltip)
+		end
 		prevWidget = label
 		bar.checkboxes[#bar.checkboxes + 1] = check
 	end

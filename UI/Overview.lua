@@ -140,8 +140,8 @@ local SIGN_OPTIONS = {
 }
 
 local NOTES_OPTIONS = {
-	{ value = "noted", text = "Noted characters" },
-	{ value = "unnoted", text = "Un-noted characters" },
+	{ value = "noted", text = "Noted players" },
+	{ value = "unnoted", text = "Un-noted players" },
 	{ value = "featured", text = "Featured notes" },
 	{ value = "unfeatured", text = "Un-featured notes" },
 }
@@ -472,7 +472,9 @@ local function syncClassRaceDropdowns()
 	classRaceBar.dropdowns[2]:SetText(sexFilter:SummaryText(ns.FillSexFilterOptions(sexFilterOptions), ns.SexFilterAllText()))
 	classRaceBar.dropdowns[3]:SetText(raceFilter:SummaryText(getRaceOptions(), "All races"))
 	classRaceBar.dropdowns[4]:SetText(factionFilter:SummaryText(FACTION_OPTIONS, "All factions"))
-	classRaceBar.dropdowns[5]:SetText(ignoredFilter:SummaryText(IGNORED_OPTIONS, "Any ignore status"))
+	if charBar and charBar.dropdowns[3] then
+		charBar.dropdowns[3]:SetText(ignoredFilter:SummaryText(IGNORED_OPTIONS, "Any ignore status"))
+	end
 end
 
 -- just the body type dropdown, cheap enough to run on every refresh so its options and
@@ -1000,7 +1002,7 @@ local function createPlayersContent()
 				getSummaryText = function() return bracketFilter:SummaryText(getBracketOptions(), "All brackets") end,
 				clearText = "All brackets",
 				onClear = function() bracketFilter:Clear(); ns.RefreshOverview() end,
-				width = 220,
+				width = 150,
 			},
 			{
 				multi = true,
@@ -1038,7 +1040,7 @@ local function createPlayersContent()
 			},
 			{
 				type = "checkbox",
-				label = "Current character only",
+				label = "Current only",
 				initial = currentCharOnly,
 				onChange = function(checked) currentCharOnly = checked; ns.RefreshOverview() end,
 			},
@@ -1051,13 +1053,25 @@ local function createPlayersContent()
 				getSummaryText = function() return lastSeenFilter:SummaryText(LAST_SEEN_OPTIONS, "Any time") end,
 				clearText = "Any time",
 				onClear = function() lastSeenFilter:Clear(); ns.RefreshOverview() end,
-				width = 140,
+				width = 115,
 			},
 			{
 				type = "checkbox",
-				label = "Invert (not seen)",
+				label = "Invert",
+				tooltip = "Show players NOT seen in the chosen time range instead.",
 				initial = lastSeenInvert,
 				onChange = function(checked) lastSeenInvert = checked; ns.RefreshOverview() end,
+			},
+			{
+				type = "dropdown",
+				multi = true,
+				options = IGNORED_OPTIONS,
+				isSelected = function(value) return ignoredFilter.selected[value] == true end,
+				toggle = function(value) ignoredFilter:Toggle(value); syncClassRaceDropdowns(); ns.RefreshOverview() end,
+				getSummaryText = function() return ignoredFilter:SummaryText(IGNORED_OPTIONS, "Any ignore status") end,
+				clearText = "Any ignore status",
+				onClear = function() ignoredFilter:Clear(); syncClassRaceDropdowns(); ns.RefreshOverview() end,
+				width = 150,
 			},
 		},
 		rightCheckbox = {
@@ -1093,7 +1107,7 @@ local function createPlayersContent()
 				getSummaryText = function() return classFilter:SummaryText(getClassOptions(), "All classes") end,
 				clearText = "All classes",
 				onClear = function() classFilter:Clear(); syncClassRaceDropdowns(); ns.RefreshOverview() end,
-				width = 140,
+				width = 100,
 			},
 			{
 				multi = true,
@@ -1124,16 +1138,6 @@ local function createPlayersContent()
 				clearText = "All factions",
 				onClear = function() factionFilter:Clear(); syncClassRaceDropdowns(); ns.RefreshOverview() end,
 				width = 130,
-			},
-			{
-				multi = true,
-				options = IGNORED_OPTIONS,
-				isSelected = function(value) return ignoredFilter.selected[value] == true end,
-				toggle = function(value) ignoredFilter:Toggle(value); syncClassRaceDropdowns(); ns.RefreshOverview() end,
-				getSummaryText = function() return ignoredFilter:SummaryText(IGNORED_OPTIONS, "Any ignore status") end,
-				clearText = "Any ignore status",
-				onClear = function() ignoredFilter:Clear(); syncClassRaceDropdowns(); ns.RefreshOverview() end,
-				width = 150,
 			},
 		},
 	})

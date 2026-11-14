@@ -274,7 +274,7 @@ local function resetAllHistoryFilters()
 			filterBar.checkbox:SetChecked(false)
 		end
 		if filterBar.dropdowns[1] then
-			filterBar.dropdowns[1]:SetText(signFilter:SummaryText(SIGN_OPTIONS, "All standing changes"))
+			filterBar.dropdowns[1]:SetText(signFilter:SummaryText(SIGN_OPTIONS, "Standing changes"))
 		end
 		if filterBar.dropdowns[2] then
 			filterBar.dropdowns[2]:SetText(sourceSummaryText())
@@ -552,10 +552,10 @@ function ns.BuildHistoryPanel(parent)
 				options = SIGN_OPTIONS,
 				isSelected = function(value) return signFilter.selected[value] == true end,
 				toggle = function(value) signFilter:Toggle(value); ns.RefreshHistory() end,
-				getSummaryText = function() return signFilter:SummaryText(SIGN_OPTIONS, "All standing changes") end,
-				clearText = "All standing changes",
+				getSummaryText = function() return signFilter:SummaryText(SIGN_OPTIONS, "Standing changes") end,
+				clearText = "Standing changes",
 				onClear = function() signFilter:Clear(); ns.RefreshHistory() end,
-				width = 170,
+				width = 102,
 			},
 			{
 				multi = true,
@@ -565,7 +565,7 @@ function ns.BuildHistoryPanel(parent)
 				getSummaryText = sourceSummaryText,
 				clearText = "All sources",
 				onClear = function() sourceFilter:Clear(); ns.RefreshHistory() end,
-				width = 140,
+				width = 104,
 			},
 		},
 		checkbox = {
@@ -591,7 +591,7 @@ function ns.BuildHistoryPanel(parent)
 			width = 170,
 		},
 		checkbox = {
-			label = "Current character only",
+			label = "Current only",
 			initial = currentCharOnly,
 			onChange = function(checked) currentCharOnly = checked; ns.RefreshHistory() end,
 		},
@@ -629,7 +629,7 @@ function ns.BuildHistoryPanel(parent)
 				getSummaryText = function() return classFilter:SummaryText(getClassOptions(), "All classes") end,
 				clearText = "All classes",
 				onClear = function() classFilter:Clear(); syncClassRaceDropdowns(); ns.RefreshHistory() end,
-				width = 140,
+				width = 100,
 			},
 			{
 				multi = true,

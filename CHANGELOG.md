@@ -2,6 +2,14 @@
 
 All notable changes to Worth Remembering are documented here.
 
+## [1.1.1]
+
+### Changed
+- Minor UI adjustments
+
+### Fixed
+- On the Players tab, the ignore status filter could overlap the Columns dropdown when the window was narrow. It's now on the row above, after "Invert".
+
 ## [1.1] - 2026-11-13
 
 ### Added
