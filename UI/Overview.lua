@@ -1285,6 +1285,7 @@ local function createPlayersContent()
 	})
 	ns.RegisterTourTarget("players.table", playersTable.container)
 	ns.RegisterTourTarget("players.filters", function() return { filterBar, flow.LastRow() } end)
+	ns.RegisterTourTarget("players.ignoredFilter", mid[3])
 end
 
 -- window position/size are saved on every move/resize and restored at creation,

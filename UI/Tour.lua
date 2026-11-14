@@ -90,7 +90,7 @@ ns.TOURS = {
 		{
 			page = "general", box = "Danger Zone", side = "right",
 			title = "Danger zone",
-			text = "Clear Ignored empties your ignore list in one go. Reset UI now resets hidden filters too.",
+			text = "Clear Ignored empties your ignore list.\nReset UI now resets hidden filters too.",
 		},
 		{
 			tab = "statistics", target = "tab.statistics", side = "below",
@@ -105,6 +105,37 @@ ns.TOURS = {
 		{
 			tab = "about",
 			title = "That's all for 1.2",
+			text = "Thanks for using Worth Remembering!",
+		},
+	},
+	["v1.1"] = {
+		{
+			title = "What's new in 1.1",
+			text = "Ignoring! Keep specific players, or whole groups of them, out of the automatic stuff.\n\nSuggested by Reddit user\n/u/Ksir73",
+		},
+		{
+			page = "ignore", box = "Ignore by Relationship", side = "right",
+			title = "Ignore by relationship",
+			text = "Leave your guild, WoW friends, or BattleTag friends out of auto-entries, the survey, or indicators (nameplate icon, chat tag, Nearby window). All off by default.",
+		},
+		{
+			page = "ignore", box = "Ignored Players", side = "right",
+			title = "Ignored players",
+			text = "Or ignore specific players, which overrides the rules above. A row with every box unchecked always tracks them.\n\nAdd them here, or right-click anyone and pick Ignore Player. Ignoring someone offers to clean up their existing auto-entries.",
+		},
+		{
+			page = "ignore", target = "options.heart.ignore", side = "below",
+			title = "Community credit",
+			text = "Features suggested by the community get a heart on their Options page. Hover or click it to see who suggested what.",
+		},
+		{
+			tab = "players", target = "players.ignoredFilter", side = "below",
+			title = "On the Players tab",
+			text = "An Ignored column and filter show who's ignored and why: on your list, or by which rule.",
+		},
+		{
+			tab = "about",
+			title = "That's all for 1.1",
 			text = "Thanks for using Worth Remembering!",
 		},
 	},

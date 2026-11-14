@@ -3611,6 +3611,7 @@ local function attachCreditHeart(content, page, inset)
 	heart:SetFrameLevel(content:GetFrameLevel() + 20)
 	heart:SetNormalTexture(HEART_TEXTURE)
 	heart:SetHighlightTexture(HEART_TEXTURE, "ADD")
+	ns.RegisterTourTarget("options.heart." .. page, heart)
 	local lines = {}
 	for _, credit in ipairs(credits) do
 		lines[#lines + 1] = ns.CreditTextTwoLine(credit)
