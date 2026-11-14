@@ -9,6 +9,7 @@ ns.CHANGELOG = {
 		sections = {
 			{ heading = "Added", items = {
 				"\"Hold for (s)\" in Options > General > Nearby Window: keeps a player in the Nearby window for that many seconds after their nameplate goes away, faded out. Coming back within that time doesn't alert again. Off (0) by default.",
+				"\"Target\" as a single- or double-click action for the Nearby window's rows (Options > General > Nearby Window). Out of combat only, since the game doesn't let addons target during combat; there a Target click does nothing.",
 				"\"Clear Ignored\" in Options > General > Danger Zone: empties your ignore list (the guild and friend rules are kept).",
 				"A new \"Filters\" box in Options > General: choose which filters the Players and History tabs show. Hiding a filter also clears it.",
 			}},

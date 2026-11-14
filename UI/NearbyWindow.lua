@@ -165,7 +165,97 @@ function ns.SetNearbyScale(value)
 	end
 end
 
--- what a row click does, per Options > General > Nearby Window
+-- targeting is protected, so it runs through one secure button laid over whichever row
+-- is hovered (UIParent's child, so the window itself stays unprotected). out of combat
+-- only: it's hidden as combat starts, and a "target" click is a no-op without it
+local targetButton
+
+local function rowTargetingUsed()
+	local settings = ns.GetSettings()
+	return settings.nearbySingleClick == "target" or settings.nearbyDoubleClick == "target"
+end
+
+local function hideTargetButton()
+	if targetButton and not InCombatLockdown() then
+		targetButton:Hide()
+		targetButton.row = nil
+	end
+end
+
+local function ensureTargetButton()
+	if targetButton then
+		return targetButton
+	end
+	targetButton = CreateFrame("Button", "WRNearbyTargetButton", UIParent, "SecureActionButtonTemplate")
+	targetButton:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	targetButton:SetAttribute("useOnKeyDown", false)
+	targetButton:Hide()
+
+	local highlight = targetButton:CreateTexture(nil, "HIGHLIGHT")
+	highlight:SetAllPoints()
+	highlight:SetColorTexture(1, 0.82, 0, 0.15)
+
+	-- macrotext follows whoever the hovered row shows right now, rows get reused
+	targetButton:SetScript("PreClick", function(self, button)
+		if InCombatLockdown() then
+			return
+		end
+		local name = self.row and self.row.targetName
+		self:SetAttribute("macrotext1", name and ("/targetexact " .. name) or nil)
+		local single = ns.GetSettings().nearbySingleClick
+		if button == "LeftButton" and (single == "target" or self.armedForDouble) then
+			self:SetAttribute("type1", "macro")
+		else
+			self:SetAttribute("type1", nil)
+		end
+	end)
+	targetButton:SetScript("PostClick", function(self, button)
+		local row = self.row
+		local onClick = row and row:GetScript("OnClick")
+		if onClick then
+			onClick(row, button)
+		end
+		if InCombatLockdown() or button ~= "LeftButton" then
+			return
+		end
+		-- a double-click target fires on the second click, so the first one arms it
+		local settings = ns.GetSettings()
+		if self.armedForDouble then
+			self.armedForDouble = nil
+		elseif settings.nearbyDoubleClick == "target" and settings.nearbySingleClick ~= "target" then
+			self.armedForDouble = true
+			C_Timer.After((settings.nearbyDoubleClickMs or 300) / 1000, function()
+				targetButton.armedForDouble = nil
+			end)
+		end
+	end)
+	targetButton:SetScript("OnLeave", hideTargetButton)
+
+	local combat = CreateFrame("Frame")
+	combat:RegisterEvent("PLAYER_REGEN_DISABLED")
+	combat:SetScript("OnEvent", function()
+		targetButton:Hide()
+		targetButton.row = nil
+	end)
+	return targetButton
+end
+
+local function showTargetButton(row)
+	if InCombatLockdown() or not rowTargetingUsed() then
+		return
+	end
+	local button = ensureTargetButton()
+	button:ClearAllPoints()
+	button:SetAllPoints(row)
+	button:SetFrameStrata(row:GetFrameStrata())
+	button:SetFrameLevel(row:GetFrameLevel() + 5)
+	button.row = row
+	button.armedForDouble = nil
+	button:Show()
+end
+
+-- what a row click does, per Options > General > Nearby Window. "target" happens in the
+-- secure button above, nothing to do here
 local function performRowAction(action, key)
 	if action == "details" then
 		ns.ShowPlayerDetails(key)
@@ -183,6 +273,7 @@ local function acquireRow(index)
 	row = CreateFrame("Button", nil, scrollChild, "BackdropTemplate")
 	row:SetSize(rowAreaWidth(), ROW_HEIGHT)
 	row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+	row:HookScript("OnEnter", showTargetButton)
 
 	row.name = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 	row.name:SetPoint("LEFT", 4, 0)
@@ -334,6 +425,7 @@ local function refresh()
 		row.name:SetText(name)
 		row.name:SetTextColor(ns.ClassColor(record.classFile))
 		row.standing:SetText(tostring(standing))
+		row.targetName = ns.TargetNameFor(record)
 		row.standing:SetTextColor(bracket.color[1], bracket.color[2], bracket.color[3])
 
 		row:SetScript("OnClick", function(_, button)
@@ -384,6 +476,9 @@ local function refresh()
 
 	for i = #players + 1, #rowPool do
 		rowPool[i]:Hide()
+	end
+	if targetButton and targetButton.row and not targetButton.row:IsShown() then
+		hideTargetButton()
 	end
 
 	layoutRowArea(#players)
@@ -448,6 +543,7 @@ end
 local function createFrame()
 	local settings = ns.GetSettings()
 	frame = CreateFrame("Frame", "WRNearbyFrame", UIParent, "BackdropTemplate")
+	frame:HookScript("OnHide", hideTargetButton)
 	if settings.nearbyStaticSize then
 		frame:SetSize(settings.nearbyStaticWidth or WINDOW_WIDTH, settings.nearbyStaticHeight or 125)
 	else

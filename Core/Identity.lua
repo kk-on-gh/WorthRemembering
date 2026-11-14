@@ -8,6 +8,18 @@ local usesSurnameIdentity = (Constants ~= nil and Constants.CharacterNameSeparat
 local SURNAME_SEPARATOR = Constants and Constants.CharacterNameSeparatorConsts
 	and Constants.CharacterNameSeparatorConsts.CHARACTERNAME_SURNAME_SEPARATOR
 
+-- full name as /targetexact expects it: "Name Surname" on Forever, "Name-Realm" on retail
+function ns.TargetNameFor(record)
+	if not (record and record.name) then
+		return nil
+	end
+	local suffix = record.realmOrSurname
+	if not suffix or suffix == "" then
+		return record.name
+	end
+	return record.name .. (usesSurnameIdentity and (SURNAME_SEPARATOR or " ") or "-") .. suffix
+end
+
 -- splits a joined sender string into name/suffix for ns.BuildKey, regardless of separator
 function ns.SplitNameSuffix(fullName)
 	if SURNAME_SEPARATOR then

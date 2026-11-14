@@ -621,6 +621,7 @@ local function buildNearbyWindowControl(parent, y)
 	local ROW_CLICK_OPTIONS = {
 		{ value = "details", text = "Details" },
 		{ value = "quickadd", text = "Quick-Add" },
+		{ value = "target", text = "Target" },
 		{ value = "nothing", text = "Nothing" },
 	}
 
@@ -632,7 +633,7 @@ local function buildNearbyWindowControl(parent, y)
 		function(value) ns.GetSettings().nearbySingleClick = value end,
 		120, 20)
 	singleDropdown:SetPoint("LEFT", singleLabel, "RIGHT", 6, 0)
-	setTooltip(singleDropdown, "What clicking a player's row in the Nearby window opens.")
+	setTooltip(singleDropdown, "What clicking a player's row in the Nearby window does. Target only works out of combat (the game doesn't allow addons to target in combat).")
 
 	local doubleLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 	doubleLabel:SetPoint("LEFT", singleDropdown, "RIGHT", 24, 0)
@@ -642,7 +643,7 @@ local function buildNearbyWindowControl(parent, y)
 		function(value) ns.GetSettings().nearbyDoubleClick = value end,
 		120, 20)
 	doubleDropdown:SetPoint("LEFT", doubleLabel, "RIGHT", 6, 0)
-	setTooltip(doubleDropdown, "What double-clicking a player's row opens. Set to Nothing and a single click responds instantly, with no wait for a possible second click.")
+	setTooltip(doubleDropdown, "What double-clicking a player's row does. Set to Nothing and a single click responds instantly, with no wait for a possible second click. Target only works out of combat.")
 
 	local speedLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 	speedLabel:SetPoint("TOPLEFT", 10, staticCheckY - 85)
