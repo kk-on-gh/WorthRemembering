@@ -642,7 +642,7 @@ local COLUMNS = {
 	{ key = "standing", label = "Standing", width = 100,
 		min = function() return ns.GetSettings().hidePlayersStandingButtons and 50 or 100 end },
 	{ key = "bracket", label = "Bracket", width = 80, min = 80, onCellClick = onBracketCellClick },
-	{ key = "entries", label = "Entries", width = 54, min = 50 },
+	{ key = "entries", label = "Entries", width = 55, min = 50 },
 	-- min depends on whether the New button is hidden (Options > General > Window): see
 	-- the Standing column's own identical reasoning above
 	{ key = "notes", label = "Notes", width = 90,
