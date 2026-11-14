@@ -78,16 +78,27 @@ local function applySmallBackdrop(frame)
 	end
 end
 
--- same rounding problem for checkbox art: an edge goes thin or vanishes at fractional
--- positions (dragged column widths, UI scale)
+-- checkbox art is drawn well below its native size, and without mipmaps its thin border
+-- lines drop out depending on where the box lands. trilinear filtering keeps them
 function ns.UnsnapCheckbox(btn)
 	local textures = { btn:GetNormalTexture(), btn:GetPushedTexture(), btn:GetHighlightTexture(),
 		btn:GetCheckedTexture(), btn:GetDisabledCheckedTexture() }
 	for i = 1, 5 do
 		local tex = textures[i]
-		if tex and tex.SetSnapToPixelGrid then
-			tex:SetSnapToPixelGrid(false)
-			tex:SetTexelSnappingBias(0)
+		if tex then
+			local atlas = tex.GetAtlas and tex:GetAtlas()
+			if atlas then
+				tex:SetAtlas(atlas, false, "TRILINEAR")
+			else
+				local file = tex:GetTexture()
+				if file then
+					tex:SetTexture(file, nil, nil, "TRILINEAR")
+				end
+			end
+			if tex.SetSnapToPixelGrid then
+				tex:SetSnapToPixelGrid(false)
+				tex:SetTexelSnappingBias(0)
+			end
 		end
 	end
 end

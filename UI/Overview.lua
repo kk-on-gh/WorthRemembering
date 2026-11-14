@@ -992,7 +992,7 @@ local function createPlayersContent()
 				getSummaryText = function() return signFilter:SummaryText(SIGN_OPTIONS, "All standings") end,
 				clearText = "All standings",
 				onClear = function() signFilter:Clear(); ns.RefreshOverview() end,
-				width = 150,
+				width = 112,
 			},
 			{
 				multi = true,
@@ -1012,7 +1012,7 @@ local function createPlayersContent()
 				getSummaryText = function() return notesFilter:SummaryText(NOTES_OPTIONS, "Notes") end,
 				clearText = "Notes",
 				onClear = function() notesFilter:Clear(); ns.RefreshOverview() end,
-				width = 170,
+				width = 153,
 			},
 		},
 		actionButton = { text = "Prune", width = 70, onClick = pruneShownPlayers },
@@ -1117,7 +1117,7 @@ local function createPlayersContent()
 				getSummaryText = function() return sexFilter:SummaryText(ns.FillSexFilterOptions(sexFilterOptions), ns.SexFilterAllText()) end,
 				clearText = ns.SexFilterAllText,
 				onClear = function() sexFilter:Clear(); syncClassRaceDropdowns(); ns.RefreshOverview() end,
-				width = 140,
+				width = 126,
 			},
 			{
 				multi = true,
@@ -1137,7 +1137,7 @@ local function createPlayersContent()
 				getSummaryText = function() return factionFilter:SummaryText(FACTION_OPTIONS, "All factions") end,
 				clearText = "All factions",
 				onClear = function() factionFilter:Clear(); syncClassRaceDropdowns(); ns.RefreshOverview() end,
-				width = 130,
+				width = 117,
 			},
 		},
 	})
