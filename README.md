@@ -137,6 +137,15 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes.
 * A small "Would you like to fill out the survey?" prompt asks first (own saved position, and a "Don't ask me again" option), so it doesn't open uninvited if you don't want it to.
 * The auto-log and the survey are fully independent, usable together or separately.
 
+**Ignoring Players**
+
+* Keep specific players out of the automatic stuff: right-click them in any Worth Remembering menu and pick "Ignore Player", or add them by name in Options > Ignore.
+* Choose per player what to ignore: auto-entries, the dungeon/raid survey, and indicators (nameplate icon, chat tag, Nearby window).
+* Or ignore by relationship: your guild, your WoW friends, and your BattleTag friends, each with their own checkboxes. All off by default.
+* A player on the list overrides the rules, so you can ignore your whole guild except one person.
+* Your own notes and tooltips are never affected.
+* The Players tab has an Ignored column and filter, showing who's ignored and why.
+
 **Other**
 
 * A draggable minimap icon for quick access: left-click to open the window, right-click for a small menu, or hide it entirely from Options.
@@ -172,13 +181,17 @@ Alerts
 
 ![image](https://cdn.jsdelivr.net/gh/kk-on-gh/WorthRemembering-Media@master/Screenshots/options-alerts.png)
 
+Presets
+
+![image](https://cdn.jsdelivr.net/gh/kk-on-gh/WorthRemembering-Media@master/Screenshots/options-presets.png)
+
 Radial Menu
 
 ![image](https://cdn.jsdelivr.net/gh/kk-on-gh/WorthRemembering-Media@master/Screenshots/options-radial.png)
 
-Presets
+Ignore
 
-![image](https://cdn.jsdelivr.net/gh/kk-on-gh/WorthRemembering-Media@master/Screenshots/options-presets.png)
+![image](https://cdn.jsdelivr.net/gh/kk-on-gh/WorthRemembering-Media@master/Screenshots/options-ignore.png)
 
 ## A Note on Design
 

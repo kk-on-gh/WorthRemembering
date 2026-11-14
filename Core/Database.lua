@@ -339,6 +339,46 @@ function ns.DeleteEntry(key, entry)
 	ns.RecomputeStanding(record)
 end
 
+function ns.GetIgnoreList()
+	return db.ignored
+end
+
+function ns.IsAutoSource(source)
+	return type(source) == "string" and source:sub(1, 5) == "auto-"
+end
+
+function ns.CountAutoEntries(key)
+	local record = ns.GetPlayerRecord(key, false)
+	local count = 0
+	if record then
+		for _, entry in ipairs(record.entries) do
+			if ns.IsAutoSource(entry.source) then
+				count = count + 1
+			end
+		end
+	end
+	return count
+end
+
+-- removes every auto-* entry for a player, keeps manual and survey ones
+function ns.DeleteAutoEntries(key)
+	local record = ns.GetPlayerRecord(key, false)
+	if not record then
+		return 0
+	end
+	local kept, removed = {}, 0
+	for _, entry in ipairs(record.entries) do
+		if ns.IsAutoSource(entry.source) then
+			removed = removed + 1
+		else
+			kept[#kept + 1] = entry
+		end
+	end
+	record.entries = kept
+	ns.RecomputeStanding(record)
+	return removed
+end
+
 -- deletes a player's whole record. callers must confirm first, this doesn't ask
 function ns.DeletePlayerRecord(key)
 	db.players[key] = nil

@@ -3230,6 +3230,287 @@ local function buildRadialMenuPanel(parent)
 	end)
 end
 
+local IGNORE_RULE_TIPS = {
+	guild = "Everyone in your current guild, online or offline.",
+	friends = "Everyone you added with Add WoW Friend. Only applies while they're online.",
+	bnet = "Whatever character your BattleTag friends are playing in this version of WoW, so all their alts are covered. Only applies while they're online.",
+}
+
+local IGNORE_LABEL_WIDTH = 170
+local IGNORE_COL_WIDTH = 110
+local IGNORE_ROW_HEIGHT = 22
+
+local function buildIgnoreRulesBox(parent, y)
+	local rules = ns.GetSettings().ignore
+	local gridTop = -24
+	local rowsTop = gridTop - 18
+	local helpTop = rowsTop - #ns.IGNORE_RULES * IGNORE_ROW_HEIGHT - 6
+	local height = -helpTop + 34
+	local box = createSectionBox(parent, y, height, "Ignore by Relationship")
+
+	local function columnCenter(i)
+		return IGNORE_LABEL_WIDTH + (i - 0.5) * IGNORE_COL_WIDTH
+	end
+
+	for i, flag in ipairs(ns.IGNORE_FLAGS) do
+		local label = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		label:SetPoint("TOP", box, "TOPLEFT", columnCenter(i), gridTop)
+		label:SetText(flag.label)
+		setTooltip(label, flag.tip)
+	end
+
+	for r, rule in ipairs(ns.IGNORE_RULES) do
+		local rowMid = rowsTop - (r - 0.5) * IGNORE_ROW_HEIGHT
+		local label = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		label:SetPoint("LEFT", box, "TOPLEFT", 14, rowMid)
+		label:SetText(rule.label)
+		setTooltip(label, IGNORE_RULE_TIPS[rule.key])
+		for i, flag in ipairs(ns.IGNORE_FLAGS) do
+			local check = ns.CreateSmallCheckbox(box, 22, rules[rule.key][flag.key], function(checked)
+				ns.SetIgnoreRuleFlag(rule.key, flag.key, checked)
+			end)
+			check:SetPoint("CENTER", box, "TOPLEFT", columnCenter(i), rowMid)
+		end
+	end
+
+	local help = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	help:SetPoint("TOPLEFT", 14, helpTop)
+	help:SetPoint("RIGHT", -14, 0)
+	help:SetJustifyH("LEFT")
+	help:SetWordWrap(true)
+	help:SetText("Players on the list below override these rules. To keep tracking someone a rule would catch, add them below and uncheck all their boxes.")
+
+	return y - height - 6
+end
+
+local function buildIgnoreListBox(parent, y)
+	local box = createSectionBox(parent, y, 100, "Ignored Players")
+	box:SetPoint("BOTTOM", parent, "BOTTOM", 0, 8)
+
+	local addTarget = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+	addTarget:SetSize(90, 20)
+	addTarget:SetPoint("TOPLEFT", 8, -22)
+	addTarget:SetText("Add Target")
+	addTarget:SetScript("OnClick", function()
+		local identity = UnitIsPlayer("target") and not UnitIsUnit("target", "player") and ns.IdentifyUnit("target")
+		if not identity then
+			ns.Print("Target a player first.")
+			return
+		end
+		if ns.IsOnIgnoreList(identity.key) then
+			ns.Print(ns.DisplayName(identity, identity.key) .. " is already on your ignore list.")
+			return
+		end
+		ns.AddToIgnoreList(identity.key, identity)
+	end)
+
+	local nameLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	nameLabel:SetPoint("LEFT", addTarget, "RIGHT", 14, 0)
+	nameLabel:SetText("Add by name")
+
+	local nameBox = ns.CreateSmallEditBox(box, 180, 18)
+	nameBox:SetJustifyH("LEFT")
+	nameBox:SetPoint("LEFT", nameLabel, "RIGHT", 6, 0)
+	setTooltip(nameBox, "Their full name, like Name Surname. Shortcut: just the first name works if only one saved player has it.")
+
+	local addButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+	addButton:SetSize(50, 20)
+	addButton:SetPoint("LEFT", nameBox, "RIGHT", 6, 0)
+	addButton:SetText("Add")
+
+	local function addByName()
+		local key, identityOrError = ns.ResolveIgnoreName(nameBox:GetText())
+		if not key then
+			if identityOrError then
+				ns.Print(identityOrError)
+			end
+			return
+		end
+		if ns.IsOnIgnoreList(key) then
+			ns.Print("Already on your ignore list.")
+		else
+			ns.AddToIgnoreList(key, identityOrError)
+		end
+		nameBox:SetText("")
+		nameBox:ClearFocus()
+	end
+	addButton:SetScript("OnClick", addByName)
+	nameBox:SetScript("OnEnterPressed", addByName)
+	nameBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+
+	local countLabel = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	countLabel:SetPoint("TOPRIGHT", -12, -26)
+
+	local refresh
+	local search = ""
+	local searchBox = CreateFrame("EditBox", nil, box, "SearchBoxTemplate")
+	searchBox:SetSize(160, 20)
+	searchBox:SetPoint("RIGHT", countLabel, "LEFT", -12, 0)
+	searchBox:HookScript("OnTextChanged", function(self)
+		search = self:GetText():lower()
+		if refresh then
+			refresh()
+		end
+	end)
+
+	-- comma-separated terms match any, same as the Players tab
+	local function matchesSearch(name)
+		if search == "" then
+			return true
+		end
+		name = name:lower()
+		for rawTerm in search:gmatch("[^,]+") do
+			local term = rawTerm:match("^%s*(.-)%s*$")
+			if term ~= "" and name:find(term, 1, true) then
+				return true
+			end
+		end
+		return false
+	end
+
+	local columns = {
+		{ key = "name", label = "Name", width = 0, min = 100, flex = true },
+	}
+	for _, flag in ipairs(ns.IGNORE_FLAGS) do
+		columns[#columns + 1] = {
+			key = flag.key, label = flag.label, width = 100, min = 80, cellType = "checkbox",
+			onCheckboxClick = function(item, checked) ns.SetIgnoreFlag(item.key, flag.key, checked) end,
+		}
+	end
+	columns[#columns + 1] = { key = "added", label = "Added", width = 100, min = 70 }
+	columns[#columns + 1] = { key = "remove", label = "", width = 70, min = 60, noSort = true,
+		onCellClick = function(item) ns.RemoveFromIgnoreList(item.key) end }
+
+	local ignoreTable = ns.CreateSortableTable(box, {
+		tableId = "ignore",
+		columns = columns,
+		rowHeight = 22,
+		getItems = function()
+			local items = {}
+			for key, row in pairs(ns.GetIgnoreList()) do
+				local record = ns.GetPlayerRecord(key, false)
+				if matchesSearch(ns.DisplayName(record or row, key)) then
+					items[#items + 1] = { key = key, row = row, record = record }
+				end
+			end
+			return items
+		end,
+		sortValue = function(item, col)
+			if col == "name" then
+				return ns.DisplayName(item.record or item.row, item.key):lower()
+			elseif col == "added" then
+				return item.row.addedAt or 0
+			elseif col == "remove" then
+				return 0
+			end
+			return item.row[col] and 1 or 0
+		end,
+		render = function(row, item)
+			local source = item.record or item.row
+			row.cells.name:SetText(ns.DisplayName(source, item.key))
+			row.cells.name:SetTextColor(ns.ClassColor(source.classFile))
+			for _, flag in ipairs(ns.IGNORE_FLAGS) do
+				row.cells[flag.key].checkbox:SetChecked(item.row[flag.key] == true)
+			end
+			row.cells.added:SetText(item.row.addedAt and ns.FormatDate(item.row.addedAt) or "-")
+			row.cells.remove:SetText("Remove")
+			row.cells.remove:SetTextColor(1, 0.45, 0.45)
+		end,
+		onRightClick = function(item, rowFrame)
+			MenuUtil.CreateContextMenu(rowFrame, function(_, rootDescription)
+				rootDescription:CreateTitle(ns.DisplayName(item.record or item.row, item.key))
+				if item.record then
+					rootDescription:CreateButton("View Details", function() ns.ShowPlayerDetails(item.key) end)
+				end
+				rootDescription:CreateButton("Remove from Ignore List", function() ns.RemoveFromIgnoreList(item.key) end)
+			end)
+		end,
+		defaultSort = { key = "added", dir = "desc" },
+		pageSize = "auto",
+	})
+	ignoreTable.container:SetPoint("TOPLEFT", 8, -50)
+	ignoreTable.container:SetPoint("BOTTOMRIGHT", -8, 6)
+
+	local emptyText = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	emptyText:SetPoint("TOP", ignoreTable.container, "TOP", 0, -40)
+
+	refresh = function()
+		ignoreTable.Refresh()
+		local shown = ignoreTable.GetItemCount()
+		local total = 0
+		for _ in pairs(ns.GetIgnoreList()) do
+			total = total + 1
+		end
+		if search ~= "" then
+			countLabel:SetText(shown .. " of " .. total)
+		else
+			countLabel:SetText(total == 1 and "1 player" or (total .. " players"))
+		end
+		emptyText:SetText(total == 0 and "No one yet. Right-click a player and pick Ignore Player, or add someone above."
+			or "No matches.")
+		emptyText:SetShown(shown == 0)
+	end
+	ns.RefreshIgnorePanel = function()
+		if box:IsVisible() then
+			refresh()
+		end
+	end
+	parent:HookScript("OnShow", refresh)
+	refresh()
+end
+
+local function buildIgnorePanel(parent)
+	local y = buildIgnoreRulesBox(parent, -8)
+	buildIgnoreListBox(parent, y)
+end
+
+local HEART_TEXTURE = "Interface\\AddOns\\WorthRemembering\\Media\\Heart.png"
+
+local creditPopup
+
+local function showCreditPopup(credits)
+	if not creditPopup then
+		local popup = createHelpPopupFrame("WRCreditPopup", 340, 140, "Community Credit")
+		popup.body = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		popup.body:SetPoint("TOPLEFT", 20, -46)
+		popup.body:SetPoint("RIGHT", -20, 0)
+		popup.body:SetJustifyH("LEFT")
+		popup.body:SetWordWrap(true)
+		popup.footer = popup:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+		popup.footer:SetPoint("TOPLEFT", popup.body, "BOTTOMLEFT", 0, -14)
+		popup.footer:SetText("Thanks for helping make Worth Remembering better!")
+		creditPopup = popup
+	end
+	local lines = {}
+	for _, credit in ipairs(credits) do
+		lines[#lines + 1] = ns.CreditTextTwoLine(credit)
+	end
+	creditPopup.body:SetText(table.concat(lines, "\n\n"))
+	creditPopup:SetHeight(46 + creditPopup.body:GetStringHeight() + 14 + creditPopup.footer:GetStringHeight() + 26)
+	creditPopup:Show()
+end
+
+-- one heart per sub-tab page, top right. hover for the credit, click for the popup.
+-- inset defaults past a scrollbar, non-scrolling pages pass their own
+local function attachCreditHeart(content, page, inset)
+	local credits = page and ns.GetCreditsForPage(page) or {}
+	if #credits == 0 then
+		return
+	end
+	local heart = CreateFrame("Button", nil, content)
+	heart:SetSize(14, 14)
+	heart:SetPoint("TOPRIGHT", -(inset or 48), -12)
+	heart:SetFrameLevel(content:GetFrameLevel() + 20)
+	heart:SetNormalTexture(HEART_TEXTURE)
+	heart:SetHighlightTexture(HEART_TEXTURE, "ADD")
+	local lines = {}
+	for _, credit in ipairs(credits) do
+		lines[#lines + 1] = ns.CreditTextTwoLine(credit)
+	end
+	setTooltip(heart, table.concat(lines, "\n\n"))
+	heart:SetScript("OnClick", function() showCreditPopup(credits) end)
+end
+
 -- Each sub-tab panel is built lazily on first visit, same pattern as the main window's
 -- own tabs.
 local SUB_TABS = {
@@ -3240,6 +3521,7 @@ local SUB_TABS = {
 	{ label = "Alerts", build = buildNearbySoundControl },
 	{ label = "Presets", build = buildPresetsPanel },
 	{ label = "Radial Menu", build = buildRadialMenuPanel },
+	{ label = "Ignore", build = buildIgnorePanel, page = "ignore", heartInset = 22 },
 }
 
 function ns.BuildOptionsPanel(parent)
@@ -3274,6 +3556,7 @@ function ns.BuildOptionsPanel(parent)
 		content:SetPoint("BOTTOMRIGHT", 0, 0)
 		content:Hide()
 		def.build(content)
+		attachCreditHeart(content, def.page, def.heartInset)
 		contents[i] = content
 	end
 

@@ -130,6 +130,7 @@ local sexFilterOptions = {}
 local factionFilter = ns.CreateFilterSet()
 local bracketFilter = ns.CreateFilterSet()
 local notesFilter = ns.CreateFilterSet()
+local ignoredFilter = ns.CreateFilterSet()
 
 local SIGN_OPTIONS = {
 	{ value = "positive", text = "Positive" },
@@ -144,6 +145,16 @@ local NOTES_OPTIONS = {
 	{ value = "featured", text = "Featured notes" },
 	{ value = "unfeatured", text = "Un-featured notes" },
 }
+
+local IGNORED_OPTIONS = {
+	{ value = "ignored", text = "Ignored" },
+	{ value = "notIgnored", text = "Not ignored" },
+}
+
+-- source from ns.GetIgnoreSource. an exempt row counts as not ignored
+local function ignoredStatus(source)
+	return (source and source ~= "exempt") and "ignored" or "notIgnored"
+end
 
 local LAST_SEEN_OPTIONS = {
 	{ value = "hour", text = "Last hour" },
@@ -430,6 +441,9 @@ local function matchesFilters(record, key)
 	if not matchesLastSeen(record) then
 		return false
 	end
+	if ignoredFilter.count > 0 and not ignoredFilter:Matches(ignoredStatus(ns.GetIgnoreSource(key, record.guid))) then
+		return false
+	end
 	return true
 end
 
@@ -445,6 +459,7 @@ local function hasActiveFilters()
 		or factionFilter.count > 0
 		or bracketFilter.count > 0
 		or lastSeenFilter.count > 0
+		or ignoredFilter.count > 0
 end
 
 -- Keeps the Class/Race/Faction dropdowns in sync when a table cell click changes the
@@ -457,6 +472,7 @@ local function syncClassRaceDropdowns()
 	classRaceBar.dropdowns[2]:SetText(sexFilter:SummaryText(ns.FillSexFilterOptions(sexFilterOptions), ns.SexFilterAllText()))
 	classRaceBar.dropdowns[3]:SetText(raceFilter:SummaryText(getRaceOptions(), "All races"))
 	classRaceBar.dropdowns[4]:SetText(factionFilter:SummaryText(FACTION_OPTIONS, "All factions"))
+	classRaceBar.dropdowns[5]:SetText(ignoredFilter:SummaryText(IGNORED_OPTIONS, "Any ignore status"))
 end
 
 -- just the body type dropdown, cheap enough to run on every refresh so its options and
@@ -495,6 +511,7 @@ local function resetAllPlayerFilters()
 	sexFilter:Clear()
 	factionFilter:Clear()
 	bracketFilter:Clear()
+	ignoredFilter:Clear()
 
 	if filterBar then
 		if filterBar.searchBox then
@@ -571,6 +588,17 @@ local function onFactionCellClick(item)
 	ns.RefreshOverview()
 end
 
+local function onIgnoredCellClick(item)
+	local value = ignoredStatus(item.ignoreSource)
+	if ignoredFilter.count == 1 and ignoredFilter.selected[value] then
+		ignoredFilter:Clear()
+	else
+		ignoredFilter:Set(value)
+	end
+	syncClassRaceDropdowns()
+	ns.RefreshOverview()
+end
+
 -- click a Bracket cell to toggle just that bracket in the filter, clicking an
 -- already-selected one clears it, same as every other click-to-filter column.
 local function onBracketCellClick(item)
@@ -603,6 +631,7 @@ local COLUMNS = {
 	{ key = "notes", label = "Notes", width = 90,
 		min = function() return ns.GetSettings().hidePlayersNewButton and 40 or 90 end },
 	{ key = "seenCount", label = "Times Seen", width = 77, min = 60 },
+	{ key = "ignored", label = "Ignored", width = 90, min = 60, onCellClick = onIgnoredCellClick },
 	{ key = "lastSeen", label = "Last Seen", width = 100, min = 100 },
 	{ key = "lastLocation", label = "Last Location", width = 120, min = 70 },
 	{ key = "lastNote", label = "Last Note", width = 0 }, -- flex, always last
@@ -613,7 +642,7 @@ local function getItems()
 	for _, key in ipairs(ns.GetAllPlayerKeys()) do
 		local record = ns.GetPlayerRecord(key, false)
 		if ns.HasEntries(record) and matchesFilters(record, key) then
-			list[#list + 1] = { key = key, record = record }
+			list[#list + 1] = { key = key, record = record, ignoreSource = ns.GetIgnoreSource(key, record.guid) }
 		end
 	end
 	return list
@@ -656,6 +685,9 @@ local function sortValue(item, key)
 		return countNotes(item.record)
 	elseif key == "seenCount" then
 		return item.record.seenCount or 0
+	elseif key == "ignored" then
+		local source = item.ignoreSource
+		return source == "list" and 3 or source == "exempt" and 1 or source and 2 or 0
 	elseif key == "lastSeen" then
 		return lastSeenTime(item.record) or 0
 	elseif key == "lastLocation" then
@@ -700,6 +732,17 @@ local function render(row, item)
 	row.cells.entries:SetText(#record.entries)
 	row.cells.notes:SetText(countNotes(record))
 	row.cells.seenCount:SetText(record.seenCount or 0)
+
+	local ignoreSource = item.ignoreSource
+	if ignoreSource == "exempt" then
+		row.cells.ignored:SetText("Exempt")
+		row.cells.ignored:SetTextColor(0.6, 0.6, 0.6)
+	elseif ignoreSource then
+		row.cells.ignored:SetText(ignoreSource == "list" and "Yes" or ("Yes (" .. ignoreSource .. ")"))
+		row.cells.ignored:SetTextColor(1, 0.6, 0.2)
+	else
+		row.cells.ignored:SetText("")
+	end
 
 	local lastSeen = lastSeenTime(record)
 	row.cells.lastSeen:SetText(lastSeen and relativeDate(lastSeen) or "-")
@@ -1082,6 +1125,16 @@ local function createPlayersContent()
 				onClear = function() factionFilter:Clear(); syncClassRaceDropdowns(); ns.RefreshOverview() end,
 				width = 130,
 			},
+			{
+				multi = true,
+				options = IGNORED_OPTIONS,
+				isSelected = function(value) return ignoredFilter.selected[value] == true end,
+				toggle = function(value) ignoredFilter:Toggle(value); syncClassRaceDropdowns(); ns.RefreshOverview() end,
+				getSummaryText = function() return ignoredFilter:SummaryText(IGNORED_OPTIONS, "Any ignore status") end,
+				clearText = "Any ignore status",
+				onClear = function() ignoredFilter:Clear(); syncClassRaceDropdowns(); ns.RefreshOverview() end,
+				width = 150,
+			},
 		},
 	})
 	local clearFiltersButton = CreateFrame("Button", nil, classRaceBar, "UIPanelButtonTemplate")
@@ -1111,6 +1164,7 @@ local function createPlayersContent()
 				rootDescription:CreateButton("View Details", function() ns.ShowPlayerDetails(item.key) end)
 				rootDescription:CreateButton("View Full History", function() ns.SelectHistoryTab(item.key) end)
 				rootDescription:CreateButton("Add Entry", function() ns.ShowQuickAdd(item.key) end)
+				ns.AddIgnoreMenuButton(rootDescription, item.key)
 				rootDescription:CreateDivider()
 				rootDescription:CreateButton("Delete Player Record", function()
 					StaticPopup_Show("WR_CONFIRM_DELETE_PLAYER", name, nil, item.key)

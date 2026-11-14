@@ -22,7 +22,7 @@ local function senderNameFilter(event, decoratedName, text, playerName)
 	end
 	local key = resolveKey(playerName)
 	local record = key and ns.GetPlayerRecord(key, false)
-	if not record or not ns.IsNotable(record) then
+	if not record or not ns.IsNotable(record) or ns.IsIgnored(key, "indicators") then
 		return nil
 	end
 	return decoratedName .. buildTag(record)

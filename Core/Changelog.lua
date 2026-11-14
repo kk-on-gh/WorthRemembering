@@ -5,6 +5,17 @@ local ns = WorthRemembering
 -- updated. most recent entry first.
 ns.CHANGELOG = {
 	{
+		version = "1.1", date = "2026-11-13", shipped = true,
+		sections = {
+			{ heading = "Added", items = {
+				"Ignore list (Options > Ignore), suggested by Reddit user /u/Ksir73: keep specific players out of auto-entries, the dungeon/raid survey, and indicators (nameplate icon, chat tag, Nearby window, Times Seen), each separately (an ignore adds them the first time with all checked). Right-click a player in any Worth Remembering menu and pick \"Ignore Player\", or add them by name. Ignoring someone offers to delete their existing auto-entries. Your own notes and tooltips are never affected.",
+				"Ignore rules for your guild, WoW friends, and BattleTag friends, each with the same three checkboxes (all off by default). A player on the ignore list overrides the rules, so a row with every box unchecked always tracks them.",
+				"An \"Ignored\" column and filter on the Players tab, showing whether each player is ignored and why.",
+				"A heart icon on Options pages where something came from a community suggestion: hover or click it to see who suggested what.",
+			}},
+		},
+	},
+	{
 		version = "1.0.1", date = "2026-11-10", shipped = true,
 		sections = {
 			{ heading = "Added", items = {

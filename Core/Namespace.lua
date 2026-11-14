@@ -393,8 +393,17 @@ ns.Defaults = {
 			},
 			notSeenDaysValue = 1,
 		},
+		-- ignore rules by relationship, flags per ns.IGNORE_FLAGS. see Core/Ignore.lua
+		ignore = {
+			guild = { auto = false, survey = false, indicators = false },
+			friends = { auto = false, survey = false, indicators = false },
+			bnet = { auto = false, survey = false, indicators = false },
+		},
 	},
 	players = {},
+	-- per-player ignore rows, outside settings so Reset All Options keeps them. a row
+	-- overrides every rule; all flags off means "always track"
+	ignored = {},
 }
 
 -- Defines each automatic-tracking trigger: what Core/AutoTrack.lua does and what

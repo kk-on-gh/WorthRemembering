@@ -687,6 +687,7 @@ function ns.BuildHistoryPanel(parent)
 				rootDescription:CreateTitle(ns.DisplayName(item.record, item.key) .. "  |  " .. ns.FormatTime(item.entry.time))
 				rootDescription:CreateButton("Edit Entry", function() ns.ShowEditEntry(item.key, item.record, item.entry) end)
 				rootDescription:CreateButton("Delete Entry", function() ns.ConfirmDeleteEntry(item.key, item.entry) end)
+				ns.AddIgnoreMenuButton(rootDescription, item.key)
 				-- multi-select's own bulk option, only once there's actually a group
 				-- worth acting on together; a single checked row is no different from
 				-- just using the row's own delete button above.

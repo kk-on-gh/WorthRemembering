@@ -2,7 +2,7 @@
 ## Title: Worth Remembering
 ## Notes: Keep distinct, timestamped notes and a -100..+100 standing on players you meet.
 ## Author: Kyle
-## Version: 1.0.1
+## Version: 1.1
 ## SavedVariables: WorthRememberingDB
 ## IconTexture: Interface\AddOns\WorthRemembering\Media\MinimapIcon.png
 ## X-Category: Miscellaneous
@@ -11,8 +11,10 @@
 
 Core/Namespace.lua
 Core/Changelog.lua
+Core/Credits.lua
 Core/Database.lua
 Core/Identity.lua
+Core/Ignore.lua
 Core/ChatIndicator.lua
 Core/Nameplates.lua
 Core/AutoTrack.lua

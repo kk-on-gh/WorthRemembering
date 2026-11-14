@@ -82,6 +82,9 @@ end
 local lastLoggedAt = {}
 
 local function logInteraction(identity, character, interaction, typeKey, settings)
+	if ns.IsIgnored(identity.key, "auto", identity.guid) then
+		return
+	end
 	local context = interaction.contextData or {}
 	local zone = context.locationName
 	if not zone or zone == "" or isSecret(zone) then

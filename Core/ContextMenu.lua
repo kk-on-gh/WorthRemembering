@@ -86,6 +86,9 @@ local function onMenuOpen(_, rootDescription, contextData)
 		rootDescription:CreateButton("Show Details", function()
 			ns.ShowPlayerDetails(identity.key)
 		end)
+	end
+	ns.AddIgnoreMenuButton(rootDescription, identity.key, identity)
+	if record then
 		rootDescription:CreateButton("Delete Player", function()
 			StaticPopup_Show("WR_CONFIRM_DELETE_PLAYER", ns.DisplayName(record, identity.key), nil, identity.key)
 		end)

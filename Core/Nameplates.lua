@@ -79,7 +79,7 @@ local function refreshPlateIcon(unit)
 
 	local identity = visibleUnits[unit]
 	local record = identity and ns.GetPlayerRecord(identity.key, false)
-	if not record or not ns.IsNotable(record) then
+	if not record or not ns.IsNotable(record) or ns.IsIgnored(identity.key, "indicators", identity.guid) then
 		icon:Hide()
 		icon.border:Hide()
 		return
@@ -157,7 +157,7 @@ local function tryAutoAdd(unit, identity)
 	if not (ns.GetSettings().autoTrack.enabled and autoAdd.enabled and (autoAdd.alsoWhileResting or not IsResting())) then
 		return
 	end
-	if ns.GetPlayerRecord(identity.key, false) then
+	if ns.GetPlayerRecord(identity.key, false) or ns.IsIgnored(identity.key, "auto", identity.guid) then
 		return
 	end
 	local entry = ns.CaptureContext(unit)
@@ -177,7 +177,8 @@ local function updateUnit(unit)
 		ns.TouchLastSeen(identity.key)
 		-- skips party/raid members, same as the Nearby window/icon: not a real encounter
 		-- if you already know they're there. lastSeen still updates, it's not a count
-		if not (ns.IsPlayerPartied and ns.IsPlayerPartied(identity.key)) then
+		if not (ns.IsPlayerPartied and ns.IsPlayerPartied(identity.key))
+			and not ns.IsIgnored(identity.key, "indicators", identity.guid) then
 			ns.IncrementSeenCount(identity.key)
 		end
 		-- backfills class/race/faction/GUID for an existing record, e.g. one added by
@@ -213,7 +214,7 @@ function ns.GetNearbyNotablePlayers()
 		if identity and not seen[identity.key] then
 			seen[identity.key] = true
 			local record = ns.GetPlayerRecord(identity.key, false)
-			if record and ns.IsNotable(record) then
+			if record and ns.IsNotable(record) and not ns.IsIgnored(identity.key, "indicators", identity.guid) then
 				results[#results + 1] = { key = identity.key, record = record }
 			end
 		end

@@ -65,7 +65,7 @@ function ns.IsPlayerPartied(key)
 end
 
 local function logAuto(key, identity, unit, source, repGain, note)
-	if not identity then
+	if not identity or ns.IsIgnored(key, "auto", identity.guid) then
 		return
 	end
 	ns.TouchIdentity(key, identity)
@@ -471,22 +471,24 @@ end
 
 local function logDungeonEntries(members, instanceName, option)
 	for _, member in ipairs(members) do
-		ns.TouchIdentity(member.identity.key, member.identity)
-		-- member.context's own zone is whatever GetZoneText() said at snapshot time,
-		-- which on the completion path is already back outside the instance by then.
-		-- overridden with the instance name captured at entry so {{loc}} in the note
-		-- reads as the dungeon/raid, not wherever everyone ended up.
-		local entry = {}
-		for k, v in pairs(member.context) do
-			entry[k] = v
+		if not ns.IsIgnored(member.identity.key, "auto", member.identity.guid) then
+			ns.TouchIdentity(member.identity.key, member.identity)
+			-- member.context's own zone is whatever GetZoneText() said at snapshot time,
+			-- which on the completion path is already back outside the instance by then.
+			-- overridden with the instance name captured at entry so {{loc}} in the note
+			-- reads as the dungeon/raid, not wherever everyone ended up.
+			local entry = {}
+			for k, v in pairs(member.context) do
+				entry[k] = v
+			end
+			entry.zone = instanceName
+			entry.delta = (option.repGain and option.repGain ~= 0) and option.repGain or nil
+			entry.source = "auto-dungeon"
+			if option.note and option.note ~= "" then
+				entry.text = ns.FillPlaceholders(option.note, entry)
+			end
+			ns.AddEntry(member.identity.key, member.identity, entry)
 		end
-		entry.zone = instanceName
-		entry.delta = (option.repGain and option.repGain ~= 0) and option.repGain or nil
-		entry.source = "auto-dungeon"
-		if option.note and option.note ~= "" then
-			entry.text = ns.FillPlaceholders(option.note, entry)
-		end
-		ns.AddEntry(member.identity.key, member.identity, entry)
 	end
 end
 
@@ -530,8 +532,16 @@ local function onInstanceTransition()
 		if autoLogEnabled and settings.autoLog.onlyOnCompletion then
 			logDungeonForParty(members, currentInstanceName, settings.autoLog)
 		end
-		if surveyEnabled and members and #members > 0 and ns.ShowDungeonSurveyPrompt then
-			ns.ShowDungeonSurveyPrompt(members, currentInstanceName)
+		if surveyEnabled and members and ns.ShowDungeonSurveyPrompt then
+			local surveyMembers = {}
+			for _, member in ipairs(members) do
+				if not ns.IsIgnored(member.identity.key, "survey", member.identity.guid) then
+					surveyMembers[#surveyMembers + 1] = member
+				end
+			end
+			if #surveyMembers > 0 then
+				ns.ShowDungeonSurveyPrompt(surveyMembers, currentInstanceName)
+			end
 		end
 
 		currentInstanceID = nil

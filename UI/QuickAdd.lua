@@ -17,7 +17,9 @@ local function refresh()
 
 	popup.title:SetText(ns.DisplayName(record, currentKey))
 	popup.title:SetTextColor(cr, cg, cb)
-	popup.standing:SetText("Standing: " .. (record.standing or 0) .. "  (" .. bracket.name .. ")")
+	local ignoredHint = ns.GetIgnoreSource(currentKey, record.guid)
+	ignoredHint = (ignoredHint and ignoredHint ~= "exempt") and "  |cff888888(on your ignore list)|r" or ""
+	popup.standing:SetText("Standing: " .. (record.standing or 0) .. "  (" .. bracket.name .. ")" .. ignoredHint)
 	popup.standing:SetTextColor(unpack(bracket.color))
 	layoutPresets()
 end
