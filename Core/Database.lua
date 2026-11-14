@@ -167,6 +167,16 @@ function ns.MarkTourOffered()
 	db.tourOffered = true
 end
 
+-- a version's "what's new" tour button glows until it's been shown once
+function ns.WasFeatureTourSeen(version)
+	return db.seenFeatureTours ~= nil and db.seenFeatureTours[version] == true
+end
+
+function ns.MarkFeatureTourSeen(version)
+	db.seenFeatureTours = db.seenFeatureTours or {}
+	db.seenFeatureTours[version] = true
+end
+
 function ns.GetPlayerRecord(key, create)
 	local record = db.players[key]
 	if not record and create then

@@ -50,6 +50,8 @@ end
 -- a "what's new" tour (ns.TOURS["v<version>"]) gets a button in its section, for the
 -- newest three versions only: older tours point at UI that may have moved since
 local FEATURE_TOUR_VERSIONS = 3
+-- versions whose button glowed this session; it keeps glowing through relayouts
+local glowingThisSession = {}
 
 local function addGlow(button)
 	local ok, glow = pcall(CreateFrame, "Frame", nil, button, "GlowBoxTemplate")
@@ -103,7 +105,9 @@ local function addVersionBlock(index, entry, y)
 		tourButton:SetPoint("TOPLEFT", 16, y - 2)
 		tourButton:SetText("Tour what's new in " .. entry.version)
 		tourButton:SetScript("OnClick", function() ns.StartTour(tourId) end)
-		if ns.UpdatedFromVersion and isNewerVersion(entry.version, ns.UpdatedFromVersion) then
+		if glowingThisSession[entry.version] or not ns.WasFeatureTourSeen(entry.version) then
+			glowingThisSession[entry.version] = true
+			ns.MarkFeatureTourSeen(entry.version)
 			addGlow(tourButton)
 		end
 		y = y - 30

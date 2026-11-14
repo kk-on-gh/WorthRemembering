@@ -4,7 +4,7 @@ local ns = WorthRemembering
 --   name) or box? (Options section box title, expanded and scrolled to, then collapsed
 --   again on leaving), side? ("below" | "above" | "left" | "right" | "center"),
 --   also? + alsoSide? (a second target that gets its own arrow and glow, the arrow on
---   that side of it), hook? (a STEP_HOOKS name below, for steps that do more than point
+--   that side of it), marks? (list of targets that get a faint box, no arrow), hook? (a STEP_HOOKS name below, for steps that do more than point
 --   at something) }
 -- no target, or a target that isn't visible, shows the box centered on the window.
 -- left/right flip to the other side when the screen edge is in the way
@@ -83,17 +83,18 @@ ns.TOURS = {
 			text = "Hide the filters you don't use on the Players and History tabs. The filter bars now rearrange to fit, and wrap instead of overlapping in a narrow window.",
 		},
 		{
-			page = "general", box = "Nearby Window", side = "right",
+			page = "general", box = "Nearby Window", side = "right", marks = { "options.nearby.hold", "options.nearby.clicks" },
 			title = "Nearby window",
 			text = "\"Hold for\" keeps players listed for a few seconds after they leave view, so they don't flicker in and out.\n\nClicking or double-clicking a row can now target them (out of combat).",
 		},
 		{
-			page = "general", box = "Danger Zone", side = "right",
+			page = "general", box = "Danger Zone", side = "right", marks = { "options.danger.clear ignored", "options.danger.reset ui" },
 			title = "Danger zone",
 			text = "Clear Ignored empties your ignore list in one go. Reset UI now resets hidden filters too.",
 		},
 		{
 			tab = "statistics", target = "tab.statistics", side = "below",
+			marks = { "stats.total positive standing given", "stats.total negative standing given" },
 			title = "Statistics",
 			text = "Click Total Positive or Total Negative Standing Given to see just those entries on the History tab.",
 		},
@@ -596,6 +597,58 @@ local function resolveTarget(name, pairProxy)
 	return nil
 end
 
+-- faint boxes around specific controls a step mentions. "glow" (soft gold) or "red"
+-- (plain border)
+local MARK_STYLE = "glow"
+local MARK_PAD = 6
+local marks = {}
+
+local function getMark(i)
+	if marks[i] then
+		return marks[i]
+	end
+	local mark
+	if MARK_STYLE == "red" then
+		mark = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+		mark:SetBackdrop({ edgeFile = "Interface/Buttons/WHITE8X8", edgeSize = 2 })
+		mark:SetBackdropBorderColor(0.9, 0.15, 0.15, 0.9)
+	else
+		mark = newGlowBox(nil)
+		hideGlowPieces(mark, { "BG", "ShadowTopLeft", "ShadowTopRight", "ShadowBottomLeft", "ShadowBottomRight",
+			"ShadowTop", "ShadowBottom", "ShadowLeft", "ShadowRight" })
+		if mark.SetBackdropColor then
+			mark:SetBackdropColor(0, 0, 0, 0)
+		end
+		mark:SetAlpha(0.35)
+	end
+	mark:SetFrameStrata("FULLSCREEN_DIALOG")
+	mark:EnableMouse(false)
+	mark.proxy = CreateFrame("Frame", nil, UIParent)
+	marks[i] = mark
+	return mark
+end
+
+local function hideMarks()
+	for _, mark in ipairs(marks) do
+		mark:Hide()
+	end
+end
+
+local function placeMarks(step)
+	hideMarks()
+	for i, name in ipairs(step.marks or {}) do
+		local mark = getMark(i)
+		local target = resolveTarget(name, mark.proxy)
+		if target then
+			mark:ClearAllPoints()
+			mark:SetPoint("TOPLEFT", target, "TOPLEFT", -MARK_PAD, MARK_PAD)
+			mark:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", MARK_PAD, -MARK_PAD)
+			mark:SetFrameLevel(callout:GetFrameLevel() - 1)
+			mark:Show()
+		end
+	end
+end
+
 -- the arrow sits on `side` of the target, pointing at it
 local ALSO_ARROW_DIR = { left = "right", right = "left", above = "down", below = "up" }
 -- room between the target and its box, so the glow border clears the text
@@ -698,6 +751,7 @@ local function placeUnsafe(step)
 	end
 	callout:Show()
 	placeAlso(step)
+	placeMarks(step)
 	runHook(step, "onPlaced", callout)
 end
 
@@ -712,6 +766,7 @@ local function place(step)
 		glow:Hide()
 		highlight:Hide()
 		alsoHighlight:Hide()
+		hideMarks()
 		callout:Show()
 	end
 end
@@ -790,6 +845,7 @@ function ns.EndTour()
 		callout:Hide()
 		highlight:Hide()
 		alsoHighlight:Hide()
+		hideMarks()
 	end
 	if demoCreatedByTour then
 		demoCreatedByTour = nil

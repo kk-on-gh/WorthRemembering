@@ -375,6 +375,7 @@ local function createTileGrid(parent, topOffset, tileDefs, columns)
 		value:SetWordWrap(false)
 
 		def._tile = { box = box, value = value }
+		ns.RegisterTourTarget("stats." .. def.label:lower(), box)
 	end
 
 	return topOffset + rows * (TILE_HEIGHT + TILE_GAP)

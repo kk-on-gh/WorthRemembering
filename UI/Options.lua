@@ -680,6 +680,8 @@ local function buildNearbyWindowControl(parent, y)
 	local holdBox = ns.CreateSmallEditBox(box, 40, 14, true)
 	holdBox:SetPoint("LEFT", holdLabel, "RIGHT", 6, 0)
 	holdBox:SetText(tostring(ns.GetSettings().nearbyHoldSeconds or 0))
+	ns.RegisterTourTarget("options.nearby.hold", { holdLabel, holdBox })
+	ns.RegisterTourTarget("options.nearby.clicks", { singleLabel, doubleDropdown })
 	setTooltip(holdBox, "Keeps a player in the Nearby window for this many seconds after their nameplate goes away, faded out. Coming back within that time doesn't alert again. 0 removes them right away.")
 	local function applyHold()
 		local value = math.max(0, math.min(600, tonumber(holdBox:GetText()) or 0))
@@ -1144,6 +1146,7 @@ local function buildDangerZoneBox(parent, y, onToggle)
 			local hint = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
 			hint:SetPoint("LEFT", button, "RIGHT", 8, 0)
 			hint:SetText(action.hint)
+			ns.RegisterTourTarget("options.danger." .. action.text:lower(), { button, hint })
 
 			rowY = rowY - DANGER_ZONE_ROW_HEIGHT
 		end
