@@ -9,7 +9,7 @@ ns.IGNORE_FLAGS = {
 	{ key = "survey", label = "Survey",
 		tip = "Left out of the dungeon/raid survey. If everyone in the group is ignored, the survey doesn't open." },
 	{ key = "indicators", label = "Indicators",
-		tip = "No nameplate icon, chat tag, Nearby window entry or alert, and Times Seen doesn't count up." },
+		tip = "No nameplate icon, chat tag, or Nearby window entry or alert." },
 }
 
 ns.IGNORE_RULES = {

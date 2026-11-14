@@ -86,8 +86,8 @@ local function logAuto(key, identity, unit, source, repGain, note)
 end
 
 -- joining your group bumps Last Seen and Times Seen; leaving only bumps Last Seen
-local function markGroupSeen(key, guid, counts)
-	if not key or not ns.GetPlayerRecord(key, false) or ns.IsIgnored(key, "indicators", guid) then
+local function markGroupSeen(key, counts)
+	if not key or not ns.GetPlayerRecord(key, false) then
 		return false
 	end
 	ns.TouchLastSeen(key, true)
@@ -116,13 +116,13 @@ local function onRosterUpdate()
 				end
 			end
 			if presentKeys[guid] == nil and identity then
-				changed = markGroupSeen(identity.key, guid, true) or changed
+				changed = markGroupSeen(identity.key, true) or changed
 			end
 		end
 	end
 	for guid, key in pairs(presentKeys) do
 		if nowPresent[guid] == nil and key then
-			changed = markGroupSeen(key, guid, false) or changed
+			changed = markGroupSeen(key, false) or changed
 		end
 	end
 	presentKeys = nowPresent

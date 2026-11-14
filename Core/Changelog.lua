@@ -5,13 +5,14 @@ local ns = WorthRemembering
 -- updated. most recent entry first.
 ns.CHANGELOG = {
 	{
-		version = "1.1.1", date = "2026-11-14", shipped = false,
+		version = "1.2", date = "2026-11-14", shipped = false,
 		sections = {
 			{ heading = "Added", items = {
 				"\"Clear Ignored\" in Options > General > Danger Zone: empties your ignore list (the guild and friend rules are kept).",
 				"A new \"Filters\" box in Options > General: choose which filters the Players and History tabs show. Hiding a filter also clears it.",
 			}},
 			{ heading = "Changed", items = {
+				"Ignoring a player for Indicators no longer stops their Times Seen from counting. They're still seen, they just don't get an icon, tag, or alert.",
 				"Statistics: clicking Total Positive or Total Negative Standing Given opens the History tab filtered to just those changes.",
 				"The Players and History filter bars now rearrange to fit: fewer rows when filters are hidden, and controls wrap onto another row instead of overlapping in a narrow window.",
 				"Players whose class isn't known yet (e.g. added by right-clicking their name in chat before ever seeing them) now show in gray instead of white, which is the Priest color.",

@@ -2,13 +2,14 @@
 
 All notable changes to Worth Remembering are documented here.
 
-## [1.1.1]
+## [1.2]
 
 ### Added
 - "Clear Ignored" in Options > General > Danger Zone: empties your ignore list (the guild and friend rules are kept).
 - A new "Filters" box in Options > General: choose which filters the Players and History tabs show. Hiding a filter also clears it.
 
 ### Changed
+- Ignoring a player for Indicators no longer stops their Times Seen from counting. They're still seen, they just don't get an icon, tag, or alert.
 - Statistics: clicking Total Positive or Total Negative Standing Given opens the History tab filtered to just those changes.
 - The Players and History filter bars now rearrange to fit: fewer rows when filters are hidden, and controls wrap onto another row instead of overlapping in a narrow window.
 - Players whose class isn't known yet (e.g. added by right-clicking their name in chat before ever seeing them) now show in gray instead of white, which is the Priest color.

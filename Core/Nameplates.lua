@@ -177,8 +177,7 @@ local function updateUnit(unit)
 		ns.TouchLastSeen(identity.key)
 		-- skips party/raid members, same as the Nearby window/icon: not a real encounter
 		-- if you already know they're there. lastSeen still updates, it's not a count
-		if not (ns.IsPlayerPartied and ns.IsPlayerPartied(identity.key))
-			and not ns.IsIgnored(identity.key, "indicators", identity.guid) then
+		if not (ns.IsPlayerPartied and ns.IsPlayerPartied(identity.key)) then
 			ns.IncrementSeenCount(identity.key)
 		end
 		-- backfills class/race/faction/GUID for an existing record, e.g. one added by
