@@ -459,7 +459,7 @@ local COLUMNS = {
 	{ key = "source", label = "Source", width = 60, min = 50, onCellClick = onSourceCellClick },
 	{ key = "delta", label = "+/-", width = 37, min = 30 },
 	{ key = "yourLevel", label = "Your Lvl", width = 63, min = 50 },
-	{ key = "theirLevel", label = "Their Lvl", width = 63, min = 50 },
+	{ key = "theirLevel", label = "Their Lvl", width = 65, min = 50 },
 	{ key = "zone", label = "Location", width = 110, min = 60, onCellClick = onZoneCellClick },
 	{ key = "note", label = "Note", width = 0, flex = true },
 	{ key = "featured", label = "Featured", width = 68, min = 50, cellType = "checkbox", onCheckboxClick = onFeaturedCheckboxClick },
