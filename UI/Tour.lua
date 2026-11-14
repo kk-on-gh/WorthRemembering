@@ -70,6 +70,43 @@ ns.TOURS = {
 			text = "Go meet some people worth remembering.\n\nQuestions, feedback, ideas, or bugs? The About tab has my contact info (top right). I love hearing from people.\n\nThank you for trying Worth Remembering!",
 		},
 	},
+	-- "what's new" tours, one per version, started from that version's patch notes.
+	-- keep only the newest three, the About tab ignores older ones anyway
+	["v1.2"] = {
+		{
+			title = "What's new in 1.2",
+			text = "A quick look at what's new. The tours themselves are new too: the basics and settings tours are on the About tab any time.",
+		},
+		{
+			page = "general", box = "Filters", side = "right",
+			title = "Filters",
+			text = "Hide the filters you don't use on the Players and History tabs. The filter bars now rearrange to fit, and wrap instead of overlapping in a narrow window.",
+		},
+		{
+			page = "general", box = "Nearby Window", side = "right",
+			title = "Nearby window",
+			text = "\"Hold for\" keeps players listed for a few seconds after they leave view, so they don't flicker in and out.\n\nClicking or double-clicking a row can now target them (out of combat).",
+		},
+		{
+			page = "general", box = "Danger Zone", side = "right",
+			title = "Danger zone",
+			text = "Clear Ignored empties your ignore list in one go. Reset UI now resets hidden filters too.",
+		},
+		{
+			tab = "statistics", target = "tab.statistics", side = "below",
+			title = "Statistics",
+			text = "Click Total Positive or Total Negative Standing Given to see just those entries on the History tab.",
+		},
+		{
+			title = "Times Seen",
+			text = "People joining your group now count as a sighting, so the people you play with regularly finally add up.\n\nIgnoring someone no longer stops their Times Seen from counting.",
+		},
+		{
+			tab = "about",
+			title = "That's all for 1.2",
+			text = "Thanks for using Worth Remembering!",
+		},
+	},
 	settings = {
 		{
 			title = "Settings tour",

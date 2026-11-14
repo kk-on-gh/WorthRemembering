@@ -47,6 +47,33 @@ local function clearScrollChild()
 	end
 end
 
+-- a "what's new" tour (ns.TOURS["v<version>"]) gets a button in its section, for the
+-- newest three versions only: older tours point at UI that may have moved since
+local FEATURE_TOUR_VERSIONS = 3
+
+local function addGlow(button)
+	local ok, glow = pcall(CreateFrame, "Frame", nil, button, "GlowBoxTemplate")
+	if not ok then
+		return
+	end
+	for _, key in ipairs({ "BG", "ShadowTopLeft", "ShadowTopRight", "ShadowBottomLeft", "ShadowBottomRight",
+		"ShadowTop", "ShadowBottom", "ShadowLeft", "ShadowRight" }) do
+		if glow[key] then
+			glow[key]:Hide()
+		end
+	end
+	glow:SetPoint("TOPLEFT", -3, 3)
+	glow:SetPoint("BOTTOMRIGHT", 3, -3)
+	glow:EnableMouse(false)
+	local pulse = glow:CreateAnimationGroup()
+	pulse:SetLooping("BOUNCE")
+	local fade = pulse:CreateAnimation("Alpha")
+	fade:SetFromAlpha(1)
+	fade:SetToAlpha(0.25)
+	fade:SetDuration(0.9)
+	pulse:Play()
+end
+
 local function addVersionBlock(index, entry, y)
 	local header = CreateFrame("Button", nil, scrollChild)
 	header:SetPoint("TOPLEFT", 0, y)
@@ -67,6 +94,19 @@ local function addVersionBlock(index, entry, y)
 
 	if not expanded[index] then
 		return y
+	end
+
+	local tourId = "v" .. entry.version
+	if index <= FEATURE_TOUR_VERSIONS and ns.TOURS and ns.TOURS[tourId] then
+		local tourButton = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+		tourButton:SetSize(170, 20)
+		tourButton:SetPoint("TOPLEFT", 16, y - 2)
+		tourButton:SetText("Tour what's new in " .. entry.version)
+		tourButton:SetScript("OnClick", function() ns.StartTour(tourId) end)
+		if ns.UpdatedFromVersion and isNewerVersion(entry.version, ns.UpdatedFromVersion) then
+			addGlow(tourButton)
+		end
+		y = y - 30
 	end
 
 	-- optional plain paragraphs before the sections, no bullet
