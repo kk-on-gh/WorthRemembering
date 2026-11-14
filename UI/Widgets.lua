@@ -535,9 +535,9 @@ end
 
 -- Re-flows filter controls across as many rows as the width needs. Reuses spec.rows
 -- (the tab's existing filter bars) as row frames and adds more if a narrow window needs
--- them. Left units flow left to right one at a time. Right units stay right-aligned in
--- order; each layout picks the spread across rows closest to their preferred rows
--- (unit.row) that leaves no row without a left unit.
+-- them. Left units flow left to right one at a time. Right units are pinned: pin "top"
+-- to the first row's right end, "bottom" to the last row's, so they only move when the
+-- row count changes.
 -- unit = { id, pieces = { { region }, { region, gapBefore }, ... }, clear = fn? }
 local FLOW_ROW_HEIGHT, FLOW_ROW_STEP, FLOW_PAD, FLOW_GAP, FLOW_SIDE_GAP, FLOW_MAX_ROWS = 28, 30, 8, 10, 16, 8
 
@@ -554,22 +554,6 @@ local function flowUnitWidth(unit)
 		w = w + (i > 1 and (piece[2] or 0) or 0) + flowRegionWidth(piece[1])
 	end
 	return w
-end
-
--- calls fn with every non-decreasing row assignment of n units across maxRows rows
-local function eachAssignment(n, maxRows, fn)
-	local assign = {}
-	local function step(i, minRow)
-		if i > n then
-			fn(assign)
-			return
-		end
-		for r = minRow, maxRows do
-			assign[i] = r
-			step(i + 1, r)
-		end
-	end
-	step(1, 1)
 end
 
 ns.FILTER_FLOWS = {}
@@ -624,43 +608,27 @@ function ns.CreateFilterReflow(spec)
 		return leftPlan, x > 0 and r or r - 1
 	end
 
-	local function choose(width)
-		for n = 1, FLOW_MAX_ROWS do
-			local best
-			eachAssignment(#spec.right, n, function(assign)
-				local leftPlan, leftRows = plan(width, n, assign)
-				if not leftPlan then
-					return
-				end
-				local used = {}
-				for _, p in ipairs(leftPlan) do
-					used[p.row] = true
-				end
-				for _, r in ipairs(assign) do
-					used[r] = true
-				end
-				for r = 1, n do
-					if not used[r] then
-						return
-					end
-				end
-				-- prefer a left unit on the last row, then right units near their usual rows
-				local score = leftRows == n and 0 or 1000
-				for i, unit in ipairs(spec.right) do
-					score = score + math.abs(assign[i] - math.min(unit.row or 1, n))
-				end
-				if not best or score < best.score then
-					best = { score = score, leftPlan = leftPlan, assign = { unpack(assign) }, rows = n }
-				end
-			end)
-			if best then
-				return best
-			end
-		end
+	local function assignFor(n)
 		local assign = {}
 		for i, unit in ipairs(spec.right) do
-			assign[i] = math.min(unit.row or 1, FLOW_MAX_ROWS)
+			assign[i] = unit.pin == "bottom" and n or 1
 		end
+		return assign
+	end
+
+	local function choose(width)
+		for n = 1, FLOW_MAX_ROWS do
+			local assign = assignFor(n)
+			local leftPlan, leftRows = plan(width, n, assign)
+			if leftPlan then
+				-- bottom-row buttons alone on their row look stranded: bring the last filter down
+				if n > 1 and leftRows < n and #leftPlan > 0 then
+					leftPlan[#leftPlan].row, leftPlan[#leftPlan].x = n, 0
+				end
+				return { leftPlan = leftPlan, assign = assign, rows = n }
+			end
+		end
+		local assign = assignFor(FLOW_MAX_ROWS)
 		return { leftPlan = (plan(width, FLOW_MAX_ROWS, assign, true)), assign = assign, rows = FLOW_MAX_ROWS }
 	end
 

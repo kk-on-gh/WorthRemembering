@@ -781,9 +781,9 @@ function ns.BuildHistoryPanel(parent)
 			dropdownUnit("faction", bottom[4], factionFilter),
 		},
 		right = {
-			{ id = "count", row = 1, pieces = { { countLabel } } },
-			{ id = "multiSelect", row = 2, pieces = { { multi }, { multi.label, 2 } } },
-			{ id = "columns", row = 3, pieces = { { columnsDropdown }, { clearFiltersButton, 8 } } },
+			{ id = "count", pin = "top", pieces = { { countLabel } } },
+			{ id = "multiSelect", pin = "bottom", pieces = { { multi }, { multi.label, 2 } } },
+			{ id = "columns", pin = "bottom", pieces = { { columnsDropdown }, { clearFiltersButton, 8 } } },
 		},
 		onRowsChanged = function(rowCount)
 			table_.container:ClearAllPoints()
