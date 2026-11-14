@@ -22,7 +22,7 @@ local function printUsage()
 	print("  /wr rep <name> <delta>  - add a standing-change entry")
 	print("  /wr show <name>         - print a player's record")
 	print("  /wr list                - print all notable player keys")
-	print("  /wr tour                - take the tour of the basics")
+	print("  /wr tour [settings]     - take the tour of the basics, or of the settings")
 	print("  /wr testsurvey [count]  - test the survey (and its confirm prompt) with fake data (default 4, e.g. 40 for a raid)")
 end
 

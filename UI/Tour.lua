@@ -1,8 +1,11 @@
 local ns = WorthRemembering
 
--- step = { title, text, tab?, optionsSub?, target? (ns.RegisterTourTarget name),
---   side? ("below" | "above" | "left" | "right" | "center"), onEnter?, onLeave? }
--- no target, or a target that isn't visible, shows the box centered on the window
+-- step = { title, text, tab?, page? (Options sub-tab label), target? (ns.RegisterTourTarget
+--   name) or box? (Options section box title, expanded and scrolled to, then collapsed
+--   again on leaving), side? ("below" | "above" | "left" | "right" | "center"),
+--   onEnter?, onLeave? }
+-- no target, or a target that isn't visible, shows the box centered on the window.
+-- left/right flip to the other side when the screen edge is in the way
 local nameplatePreviewWas
 
 ns.TOURS = {
@@ -62,11 +65,6 @@ ns.TOURS = {
 			end,
 		},
 		{
-			target = "minimap", side = "below",
-			title = "Minimap button",
-			text = "Left-click to open this window, right-click for a quick menu. You can hide it in Options > General.",
-		},
-		{
 			tab = "about", target = "tab.about", side = "below",
 			title = "About",
 			text = "Patch notes, ways to reach me, and both tours live here.",
@@ -76,11 +74,110 @@ ns.TOURS = {
 			text = "Go meet some people worth remembering.\n\nQuestions, ideas, or bugs? The About tab has my contact info.",
 		},
 	},
+	settings = {
+		{
+			title = "Settings tour",
+			text = "A look at the settings worth knowing about. Each box the tour shows you opens up, and closes again when you move on.\n\nNothing here is permanent, so feel free to experiment.",
+		},
+		{
+			page = "general", box = "Global Hotkey", side = "right",
+			title = "Global hotkey",
+			text = "Your fastest way in. Click the key button, then press a key (I use R, for Remember).\n\nTap it with someone targeted to note them, or hold it for the radial menu. The dropdowns choose what a tap opens with a target, while hovering someone, or with neither.",
+		},
+		{
+			page = "general", box = "Main", side = "right",
+			title = "Main window",
+			text = "Opacity and UI scale, plus how dates, times, and body types are shown.",
+		},
+		{
+			page = "general", box = "Filters", side = "right",
+			title = "Filters",
+			text = "Hide the filters you don't use on the Players and History tabs. The filter bars rearrange to fit what's left.",
+		},
+		{
+			page = "general", box = "Nearby Window", side = "right",
+			title = "Nearby window",
+			text = "A small floating list of notable players around you (anyone with a visible nameplate). Size it, fade it while idle, and choose what clicking a name does.",
+		},
+		{
+			page = "general", box = "Nameplate Icon", side = "right",
+			title = "Nameplate icon",
+			text = "The colored diamond over notable players' nameplates. Adjust its size and position here. The preview shows it on every nameplate while you tune it.",
+		},
+		{
+			page = "general", box = "Tooltip & Context Menu", side = "right",
+			title = "Tooltip and right-click menu",
+			text = "Choose what a notable player's tooltip shows, or turn the tooltip line and the right-click menu off entirely.",
+		},
+		{
+			page = "general", box = "Auto-Prune (on login)", side = "right",
+			title = "Auto-prune",
+			text = "Keeps the database tidy by deleting players that match these rules each time you log in. By default: no notes, no standing, and not seen for a day.",
+		},
+		{
+			page = "general", box = "Danger Zone", side = "right",
+			title = "Danger zone",
+			text = "Resets and clean-up. Reset UI puts windows and columns back the way they started. The Clear buttons delete data, and always ask first.",
+		},
+		{
+			page = "reputation", box = "Reputation Brackets", side = "right",
+			title = "Reputation brackets",
+			text = "Standing (-100 to +100) is grouped into brackets. Pick a set of labels and colors here, including a colorblind-friendly one, or make your own.",
+		},
+		{
+			page = "auto-track", box = "General", side = "right",
+			title = "Auto-track",
+			text = "Optional automatic entries: grouping up, rezzes, duels, questing together, and more. Each has its own toggle, rep gain, note, and cooldown.\n\nThe checkbox at the top turns them all off at once.",
+		},
+		{
+			page = "auto-track", box = "Recent Allies", side = "right",
+			title = "Recent Allies",
+			text = "Logs people from Blizzard's own Recent Allies list: dungeon and raid kills, delves, battlegrounds, trades, and more.",
+		},
+		{
+			page = "auto-track", box = "Nearby Players", side = "right",
+			title = "Nearby players",
+			text = "Optionally records everyone whose nameplate you see, even before you've written anything about them. It's off by default, since it adds up fast in crowded places.",
+		},
+		{
+			page = "survey", box = "Dungeon/Raid Survey", side = "right",
+			title = "Dungeon/raid survey",
+			text = "After a dungeon or raid, a survey lists your whole group so you can rate everyone at once. A small prompt asks first.",
+		},
+		{
+			page = "alerts", box = "Nearby Window Alerts", side = "right",
+			title = "Alerts",
+			text = "A sound and/or a flash when someone notable comes into range, with a cooldown per player.",
+		},
+		{
+			page = "presets", box = "Quick-Add Presets", side = "right",
+			title = "Presets",
+			text = "One-click notes like Good Healer or Rude, each with its own standing change. Used by the quick-add popup, the radial menu, and /wrquick.",
+		},
+		{
+			page = "radial menu", box = "Radial Menu", side = "right",
+			title = "Radial menu",
+			text = "Hold the hotkey for a wheel of your presets. Use one wheel, or split good and bad presets across two with a modifier key.",
+		},
+		{
+			page = "ignore", box = "Ignore by Relationship", side = "right",
+			title = "Ignoring by relationship",
+			text = "Leave your guild, WoW friends, or BattleTag friends out of auto-entries, the survey, or indicators.",
+		},
+		{
+			page = "ignore", box = "Ignored Players", side = "right",
+			title = "Ignoring players",
+			text = "Or ignore specific players, which overrides the rules above. Add them here, or from any Worth Remembering right-click menu.",
+		},
+		{
+			title = "All set!",
+			text = "That's the tour. Everything else is in these pages too, and most options explain themselves when you hover them.",
+		},
+	},
 }
 
 local targets = ns.tourTargets
 
-ns.RegisterTourTarget("minimap", function() return _G.WRMinimapButton end)
 
 local BOX_WIDTH, PAD, ARROW_GAP = 300, 14, 26
 local ARROW_FILE = "Interface\\TalentFrame\\TalentFrame-Parts"
@@ -88,7 +185,7 @@ local ROTATION = { up = 180, down = 0, left = 270, right = 90 }
 -- side the box sits on -> direction its arrow points
 local ARROW_DIR = { below = "up", above = "down", right = "left", left = "right" }
 
-local callout, highlight, arrow, glow, proxy
+local callout, highlight, arrow, glow, proxy, boxProxy
 local tour, stepIndex
 
 -- size is set once at creation; the clamped helper swaps width/height itself
@@ -195,6 +292,92 @@ local function buildCallout()
 	end
 
 	proxy = CreateFrame("Frame", nil, UIParent)
+	boxProxy = CreateFrame("Frame", nil, UIParent)
+end
+
+-- boxes the tour opened, closed again when it moves on
+local expandedByTour = {}
+
+local function expandBox(key)
+	local entry = ns.tourBoxes[key]
+	if entry and entry.toggle and not entry.expanded then
+		entry.toggle()
+		expandedByTour[key] = true
+	end
+end
+
+local function collapseBox(key)
+	if not expandedByTour[key] then
+		return
+	end
+	expandedByTour[key] = nil
+	local entry = ns.tourBoxes[key]
+	if entry and entry.toggle and entry.expanded then
+		entry.toggle()
+	end
+end
+
+local function scrollFrameOf(box)
+	local child = box:GetParent()
+	local scroll = child and child:GetParent()
+	if scroll and scroll.GetObjectType and scroll:GetObjectType() == "ScrollFrame" then
+		return scroll, child
+	end
+end
+
+local function scrollToBox(key)
+	local entry = ns.tourBoxes[key]
+	local box = entry and entry.box
+	if not box then
+		return
+	end
+	local scroll, child = scrollFrameOf(box)
+	if not (scroll and child:GetTop() and box:GetTop()) then
+		return
+	end
+	local offset = child:GetTop() - box:GetTop() - 8
+	scroll:SetVerticalScroll(math.max(0, math.min(offset, scroll:GetVerticalScrollRange() or 0)))
+end
+
+-- the part of the box currently scrolled into view
+local function boxTarget(key)
+	local entry = ns.tourBoxes[key]
+	local box = entry and entry.box
+	if not (box and box:IsVisible()) then
+		return nil
+	end
+	local scroll = scrollFrameOf(box)
+	if not scroll then
+		return box
+	end
+	local top, bottom = box:GetTop(), box:GetBottom()
+	local visTop, visBottom = math.min(top, scroll:GetTop()), math.max(bottom, scroll:GetBottom())
+	if visTop <= visBottom then
+		return nil
+	end
+	boxProxy:SetParent(scroll)
+	boxProxy:ClearAllPoints()
+	boxProxy:SetPoint("TOPLEFT", box, "TOPLEFT", 0, visTop - top)
+	boxProxy:SetPoint("BOTTOMRIGHT", box, "TOPRIGHT", 0, visBottom - top)
+	boxProxy:Show()
+	return boxProxy
+end
+
+-- flips left/right when the box wouldn't fit on that side of the screen
+local function fitSide(side, target)
+	if side ~= "left" and side ~= "right" then
+		return side
+	end
+	local scale = target:GetEffectiveScale() / UIParent:GetEffectiveScale()
+	local need = (BOX_WIDTH + ARROW_GAP + 10) * callout:GetEffectiveScale() / UIParent:GetEffectiveScale()
+	local roomRight = UIParent:GetWidth() - target:GetRight() * scale
+	local roomLeft = target:GetLeft() * scale
+	if side == "right" and roomRight < need then
+		return roomLeft >= need and "left" or "center"
+	elseif side == "left" and roomLeft < need then
+		return roomRight >= need and "right" or "center"
+	end
+	return side
 end
 
 local function resolveTarget(name)
@@ -228,8 +411,13 @@ local function place(step)
 	local height = PAD + callout.title:GetStringHeight() + 8 + callout.body:GetStringHeight() + 14 + 22 + PAD
 	callout:SetHeight(height)
 
-	local target = resolveTarget(step.target)
-	local side = target and step.side or "center"
+	local target
+	if step.box then
+		target = boxTarget(step.box)
+	else
+		target = resolveTarget(step.target)
+	end
+	local side = target and fitSide(step.side or "center", target) or "center"
 	callout:ClearAllPoints()
 	arrow:Hide()
 	glow:Hide()
@@ -279,10 +467,16 @@ local function place(step)
 	callout:Show()
 end
 
-local function leaveStep()
+local function leaveStep(nextStep)
 	local step = tour and stepIndex and tour[stepIndex]
-	if step and step.onLeave then
+	if not step then
+		return
+	end
+	if step.onLeave then
 		pcall(step.onLeave)
+	end
+	if step.box and not (nextStep and nextStep.box == step.box) then
+		collapseBox(step.box)
 	end
 end
 
@@ -290,21 +484,36 @@ function ns.ShowTourStep(index)
 	if not tour or not tour[index] then
 		return
 	end
-	leaveStep()
-	stepIndex = index
 	local step = tour[index]
-	if step.tab and ns.SelectMainTab then
-		ns.SelectMainTab(step.tab)
+	leaveStep(step)
+	stepIndex = index
+	local tab = step.tab or (step.page and "options")
+	if tab and ns.SelectMainTab then
+		ns.SelectMainTab(tab)
 	end
-	if step.optionsSub and ns.SelectOptionsSubTab then
-		ns.SelectOptionsSubTab(step.optionsSub)
+	if step.page and ns.SelectOptionsSubTab then
+		ns.SelectOptionsSubTab(step.page)
+	end
+	if step.box then
+		expandBox(step.box)
 	end
 	if step.onEnter then
 		pcall(step.onEnter)
 	end
-	-- tab switches and filter reflow settle on the next frame
+	-- tab switches, box rebuilds and filter reflow settle on the next frame; a box is
+	-- scrolled to first, then measured a frame later
 	C_Timer.After(0, function()
-		if tour and stepIndex == index then
+		if not (tour and stepIndex == index) then
+			return
+		end
+		if step.box then
+			scrollToBox(step.box)
+			C_Timer.After(0, function()
+				if tour and stepIndex == index then
+					place(step)
+				end
+			end)
+		else
 			place(step)
 		end
 	end)

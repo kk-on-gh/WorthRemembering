@@ -565,6 +565,8 @@ end
 
 -- frames the tour points at, filled in as each panel builds (UI/Tour.lua)
 ns.tourTargets = {}
+-- Options section boxes by title: { box, expanded?, toggle? }, re-registered on rebuild
+ns.tourBoxes = {}
 
 -- target: a frame, { topLeftFrame, bottomRightFrame }, or a function returning either
 function ns.RegisterTourTarget(name, target)

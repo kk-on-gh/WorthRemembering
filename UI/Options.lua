@@ -224,6 +224,11 @@ local function createSectionBox(parent, y, height, title)
 	titleText:SetText(title)
 	box.titleText = titleText
 
+	if title then
+		box.tourKey = title
+		ns.tourBoxes[title] = { box = box }
+	end
+
 	lastSectionBox = box
 	return box, titleText
 end
@@ -234,6 +239,10 @@ local COLLAPSED_HEIGHT = 24
 
 -- a +/- toggle at the start of a box's title row. clicking the title toggles too
 local function createDisclosure(box, expanded, onClick)
+	local entry = box.tourKey and ns.tourBoxes[box.tourKey]
+	if entry and entry.box == box then
+		entry.expanded, entry.toggle = expanded, onClick
+	end
 	-- same tinted-UIPanelButtonTemplate look as the Players tab's +/- buttons
 	local toggleButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
 	toggleButton:SetSize(18, 16)
@@ -3658,5 +3667,18 @@ function ns.BuildOptionsPanel(parent)
 	end
 
 	selectSubTab(1)
-	ns.SelectOptionsSubTab = selectSubTab
+	-- index, or a sub-tab label like "auto-track"
+	function ns.SelectOptionsSubTab(which)
+		if type(which) == "string" then
+			for i, def in ipairs(SUB_TABS) do
+				if def.label:lower() == which then
+					which = i
+					break
+				end
+			end
+		end
+		if type(which) == "number" then
+			selectSubTab(which)
+		end
+	end
 end

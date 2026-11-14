@@ -159,6 +159,13 @@ function ns.BuildAboutPanel(parent)
 	tourButton:SetScript("OnClick", function() ns.StartTour("basics") end)
 	ns.AttachHookTooltip(tourButton, "A quick walk through the basics, about two minutes.")
 
+	local settingsTourButton = CreateFrame("Button", nil, header, "UIPanelButtonTemplate")
+	settingsTourButton:SetSize(120, 20)
+	settingsTourButton:SetPoint("LEFT", tourButton, "RIGHT", 6, 0)
+	settingsTourButton:SetText("Settings Tour")
+	settingsTourButton:SetScript("OnClick", function() ns.StartTour("settings") end)
+	ns.AttachHookTooltip(settingsTourButton, "A walk through the Options pages and the settings worth knowing about.")
+
 	-- wraps to whatever width the window allows; everything below anchors to its bottom
 	-- so a narrow window just pushes the patch notes down
 	local welcome = header:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
