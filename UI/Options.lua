@@ -2645,6 +2645,7 @@ local function buildSoundPicker(parent, x, y, labelText, sound, builtinOptions, 
 	dropdown:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 4, -6)
 
 	pathBox = CreateFrame("EditBox", nil, container, "InputBoxTemplate")
+	ns.EnableDoubleClickSelectAll(pathBox)
 	pathBox:SetSize(190, 16)
 	pathBox:SetAutoFocus(false)
 	pathBox:SetFontObject(GameFontHighlightSmall)

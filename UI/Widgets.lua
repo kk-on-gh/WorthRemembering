@@ -179,6 +179,20 @@ function ns.CreateSmallCheckbox(parent, size, checked, onClick)
 	return btn
 end
 
+-- double-click selects everything
+function ns.EnableDoubleClickSelectAll(box)
+	local lastClickAt = 0
+	box:HookScript("OnMouseUp", function(self)
+		local now = GetTime()
+		if now - lastClickAt < 0.35 then
+			self:HighlightText()
+			lastClickAt = 0
+		else
+			lastClickAt = now
+		end
+	end)
+end
+
 function ns.CreateSmallEditBox(parent, width, height, numeric)
 	local box = CreateFrame("EditBox", nil, parent, "BackdropTemplate")
 	box:SetSize(width, height or 16)
@@ -208,17 +222,7 @@ function ns.CreateSmallEditBox(parent, width, height, numeric)
 	end
 	box:SetScript("OnEditFocusLost", nil)
 
-	-- double-click selects everything
-	local lastClickAt = 0
-	box:HookScript("OnMouseUp", function(self)
-		local now = GetTime()
-		if now - lastClickAt < 0.35 then
-			self:HighlightText()
-			lastClickAt = 0
-		else
-			lastClickAt = now
-		end
-	end)
+	ns.EnableDoubleClickSelectAll(box)
 
 	return box
 end

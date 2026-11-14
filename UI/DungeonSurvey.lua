@@ -98,6 +98,7 @@ local function acquireRow(index)
 	-- else chained off it (preset/minus/delta/plus) just follows automatically since
 	-- they're anchored relative to its own RIGHT edge
 	row.noteBox = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+	ns.EnableDoubleClickSelectAll(row.noteBox)
 	row.noteBox:SetSize(noteBoxWidthFor(totalWidth), 18)
 	row.noteBox:SetPoint("LEFT", row.name, "RIGHT", NAME_GAP, 0)
 	row.noteBox:SetAutoFocus(false)
