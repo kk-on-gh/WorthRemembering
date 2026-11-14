@@ -457,12 +457,12 @@ local COLUMNS = {
 	{ key = "faction", label = "Faction", width = 60, min = 60, onCellClick = onFactionCellClick },
 	{ key = "character", label = "Character", width = 90, min = 60, onCellClick = onCharacterCellClick },
 	{ key = "source", label = "Source", width = 60, min = 50, onCellClick = onSourceCellClick },
-	{ key = "delta", label = "+/-", width = 34, min = 30 },
-	{ key = "yourLevel", label = "Your Lvl", width = 60, min = 50 },
+	{ key = "delta", label = "+/-", width = 40, min = 30 },
+	{ key = "yourLevel", label = "Your Lvl", width = 66, min = 50 },
 	{ key = "theirLevel", label = "Their Lvl", width = 63, min = 50 },
 	{ key = "zone", label = "Location", width = 110, min = 60, onCellClick = onZoneCellClick },
 	{ key = "note", label = "Note", width = 0, flex = true },
-	{ key = "featured", label = "Featured", width = 65, min = 50, cellType = "checkbox", onCheckboxClick = onFeaturedCheckboxClick },
+	{ key = "featured", label = "Featured", width = 72, min = 50, cellType = "checkbox", onCheckboxClick = onFeaturedCheckboxClick },
 }
 
 local function sortValue(item, key)
