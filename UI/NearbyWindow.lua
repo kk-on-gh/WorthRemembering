@@ -323,6 +323,7 @@ local function refresh()
 
 	for i, entry in ipairs(players) do
 		local row = acquireRow(i)
+		row:SetAlpha(entry.held and 0.55 or 1)
 		local key, record = entry.key, entry.record
 		local name = ns.DisplayName(record, key)
 		-- reflects a pending +/- adjustment made elsewhere immediately, see

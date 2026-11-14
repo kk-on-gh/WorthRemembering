@@ -313,6 +313,8 @@ ns.Defaults = {
 		nearbyDoubleClick = "details",
 		-- how long after a first click a second one still counts as a double click
 		nearbyDoubleClickMs = 300,
+		-- seconds a player stays in the Nearby window after their nameplate goes away
+		nearbyHoldSeconds = 0,
 		-- saved drag positions for popups (quickAdd, editEntry, survey, surveyConfirm),
 		-- see ns.SavePopupPosition in UI/Widgets.lua
 		windowPositions = {},

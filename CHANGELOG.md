@@ -5,6 +5,7 @@ All notable changes to Worth Remembering are documented here.
 ## [1.2]
 
 ### Added
+- "Hold for (s)" in Options > General > Nearby Window: keeps a player in the Nearby window for that many seconds after their nameplate goes away, faded out. Coming back within that time doesn't alert again. Off (0) by default.
 - "Clear Ignored" in Options > General > Danger Zone: empties your ignore list (the guild and friend rules are kept).
 - A new "Filters" box in Options > General: choose which filters the Players and History tabs show. Hiding a filter also clears it.
 

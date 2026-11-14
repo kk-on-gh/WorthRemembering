@@ -213,10 +213,20 @@ local function updateUnit(unit)
 	refresh()
 end
 
+-- key -> { expires, guid }: kept in the Nearby list for nearbyHoldSeconds after their
+-- nameplate goes away
+local held = {}
+
 local function clearUnit(unit)
-	if visibleUnits[unit] then
+	local identity = visibleUnits[unit]
+	if identity then
 		clearPlateIcon(unit)
 		visibleUnits[unit] = nil
+		local hold = ns.GetSettings().nearbyHoldSeconds or 0
+		if hold > 0 then
+			held[identity.key] = { expires = GetTime() + hold, guid = identity.guid }
+			C_Timer.After(hold + 0.1, refresh)
+		end
 		refresh()
 	end
 end
@@ -232,6 +242,18 @@ function ns.GetNearbyNotablePlayers()
 			local record = ns.GetPlayerRecord(identity.key, false)
 			if record and ns.IsNotable(record) and not ns.IsIgnored(identity.key, "indicators", identity.guid) then
 				results[#results + 1] = { key = identity.key, record = record }
+			end
+		end
+	end
+	local now = GetTime()
+	for key, entry in pairs(held) do
+		if entry.expires <= now then
+			held[key] = nil
+		elseif not seen[key] then
+			seen[key] = true
+			local record = ns.GetPlayerRecord(key, false)
+			if record and ns.IsNotable(record) and not ns.IsIgnored(key, "indicators", entry.guid) then
+				results[#results + 1] = { key = key, record = record, held = true }
 			end
 		end
 	end

@@ -664,6 +664,26 @@ local function buildNearbyWindowControl(parent, y)
 		self:ClearFocus()
 	end)
 
+	local holdLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	holdLabel:SetPoint("LEFT", speedBox, "RIGHT", 24, 0)
+	holdLabel:SetText("Hold for (s)")
+	local holdBox = ns.CreateSmallEditBox(box, 40, 14, true)
+	holdBox:SetPoint("LEFT", holdLabel, "RIGHT", 6, 0)
+	holdBox:SetText(tostring(ns.GetSettings().nearbyHoldSeconds or 0))
+	setTooltip(holdBox, "Keeps a player in the Nearby window for this many seconds after their nameplate goes away, faded out. Coming back within that time doesn't alert again. 0 removes them right away.")
+	local function applyHold()
+		local value = math.max(0, math.min(600, tonumber(holdBox:GetText()) or 0))
+		ns.GetSettings().nearbyHoldSeconds = value
+		holdBox:SetText(tostring(value))
+		holdBox:ClearFocus()
+	end
+	holdBox:SetScript("OnEnterPressed", applyHold)
+	holdBox:SetScript("OnEditFocusLost", applyHold)
+	holdBox:SetScript("OnEscapePressed", function(self)
+		self:SetText(tostring(ns.GetSettings().nearbyHoldSeconds or 0))
+		self:ClearFocus()
+	end)
+
 	local height = 332
 	box:SetHeight(height)
 	return y - height - 6
