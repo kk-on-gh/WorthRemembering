@@ -3,11 +3,11 @@ local ns = WorthRemembering
 -- step = { title, text, tab?, page? (Options sub-tab label), target? (ns.RegisterTourTarget
 --   name) or box? (Options section box title, expanded and scrolled to, then collapsed
 --   again on leaving), side? ("below" | "above" | "left" | "right" | "center"),
---   onEnter?, onLeave? }
+--   also? + alsoSide? (a second target that gets its own arrow and glow, the arrow on
+--   that side of it), hook? (a STEP_HOOKS name below, for steps that do more than point
+--   at something) }
 -- no target, or a target that isn't visible, shows the box centered on the window.
 -- left/right flip to the other side when the screen edge is in the way
-local nameplatePreviewWas
-
 ns.TOURS = {
 	basics = {
 		{
@@ -21,8 +21,8 @@ ns.TOURS = {
 		},
 		{
 			tab = "players", target = "players.table", side = "center",
-			title = "The list",
-			text = "Click a name to open their Details.\n\nClick a class, race, bracket, or other value to filter the list to just that. Click it again to clear it.\n\nRight-click a row for more options.",
+			title = "The players list",
+			text = "Click a name to open their Details.\n\nClick a class, race, bracket, or other value to filter the list to just that. Click it again to clear it.\n\nRight-click a row for more options.\n\nDisable columns you don't care about in the top right, and click and drag to reorder them.",
 		},
 		{
 			tab = "players", target = "players.filters", side = "below",
@@ -35,7 +35,7 @@ ns.TOURS = {
 			text = "Every entry ever logged, for everyone, newest first. Right-click an entry to edit or delete it.",
 		},
 		{
-			tab = "details", target = "tab.details", side = "below",
+			tab = "details", target = "tab.details", side = "below", hook = "demoDetails",
 			title = "Details",
 			text = "Everything about one player: their standing, every note, and when and where you last saw them. Featured notes show up as a quote at the top.",
 		},
@@ -47,31 +47,27 @@ ns.TOURS = {
 		{
 			tab = "options", target = "tab.options", side = "below",
 			title = "Options",
-			text = "Every feature can be turned on or off, and most can be customized. The Settings tour (About tab) walks through the important ones.",
+			text = "Every feature can be turned on or off, and most can be customized.\n\nThere's a lot here, so the Settings tour (About tab) walks through them in more detail, and most have explanations when hovering them.",
 		},
 		{
+			hook = "notePreviews",
 			title = "Adding notes",
 			text = "Right-click any player (in the world, in chat, in your group) and choose Worth Remembering > Add Note.\n\nEven quicker: set a global hotkey in Options > General, then tap it with someone targeted. Hold it instead for a radial menu of your presets.",
 		},
 		{
+			target = "nearby", side = "right", hook = "spotting",
 			title = "Spotting people",
-			text = "Players you've noted get a diamond over their nameplate, colored by their standing. For this step, every nameplate nearby shows one.\n\nTheir standing also shows after their name in chat, like [+10], and in their tooltip.",
-			onEnter = function()
-				nameplatePreviewWas = ns.IsNameplateIconPreview and ns.IsNameplateIconPreview()
-				ns.SetNameplateIconPreview(true)
-			end,
-			onLeave = function()
-				ns.SetNameplateIconPreview(nameplatePreviewWas)
-			end,
+			text = "This Nearby window lists the notable players around you (friendly nameplates must be enabled, Shift+V by default). Click a name to add a note, double-click for their Details. It can also play a sound when someone notable shows up (Options > Alerts).\n\nPlayers you've noted get a diamond over their nameplate, colored by their standing.\n\nTheir standing also shows after their name in chat, like [+10], and in their tooltip.",
 		},
 		{
-			tab = "about", target = "tab.about", side = "below",
+			tab = "about", target = "tab.about", side = "right", also = "about.patchNotes", alsoSide = "left",
 			title = "About",
-			text = "Patch notes, ways to reach me, and both tours live here.",
+			text = "Patch notes, ways to reach me, and both tours live here. Uncheck the box if you don't want to see this window every update.",
 		},
 		{
+			tab = "about", also = "about.contact", alsoSide = "left",
 			title = "That's it!",
-			text = "Go meet some people worth remembering.\n\nQuestions, ideas, or bugs? The About tab has my contact info.",
+			text = "Go meet some people worth remembering.\n\nQuestions, feedback, ideas, or bugs? The About tab has my contact info (top right). I love hearing from people.\n\nThank you for trying Worth Remembering!",
 		},
 	},
 	settings = {
@@ -122,12 +118,17 @@ ns.TOURS = {
 		{
 			page = "reputation", box = "Reputation Brackets", side = "right",
 			title = "Reputation brackets",
-			text = "Standing (-100 to +100) is grouped into brackets. Pick a set of labels and colors here, including a colorblind-friendly one, or make your own.",
+			text = "Standing (-100 to +100) is grouped into brackets. Pick a set of labels and colors here, or make your own.",
 		},
 		{
 			page = "auto-track", box = "General", side = "right",
 			title = "Auto-track",
 			text = "Optional automatic entries: grouping up, rezzes, duels, questing together, and more. Each has its own toggle, rep gain, note, and cooldown.\n\nThe checkbox at the top turns them all off at once.",
+		},
+		{
+			page = "auto-track", box = "Directed Emotes", side = "right",
+			title = "Directed emotes",
+			text = "Log an entry when another player's emote contains a phrase you choose, like \"waves at you\" or \"thanks you\". Each rule has its own rep gain, note, and cooldown.\n\n\"Must say 'you'\" skips emotes that aren't aimed at you.",
 		},
 		{
 			page = "auto-track", box = "Recent Allies", side = "right",
@@ -142,7 +143,7 @@ ns.TOURS = {
 		{
 			page = "survey", box = "Dungeon/Raid Survey", side = "right",
 			title = "Dungeon/raid survey",
-			text = "After a dungeon or raid, a survey lists your whole group so you can rate everyone at once. A small prompt asks first.",
+			text = "After a dungeon or raid, a survey lists your whole group so you can rate everyone at once.",
 		},
 		{
 			page = "alerts", box = "Nearby Window Alerts", side = "right",
@@ -152,12 +153,12 @@ ns.TOURS = {
 		{
 			page = "presets", box = "Quick-Add Presets", side = "right",
 			title = "Presets",
-			text = "One-click notes like Good Healer or Rude, each with its own standing change. Used by the quick-add popup, the radial menu, and /wrquick.",
+			text = "One-click notes like Good Healer or Rude, each with its own standing change. Used by the quick-add popup, the radial menu, and macros:\n/wrquick good healer\n\nHover/click the little [?] for tips on using tokens in your notes.",
 		},
 		{
 			page = "radial menu", box = "Radial Menu", side = "right",
 			title = "Radial menu",
-			text = "Hold the hotkey for a wheel of your presets. Use one wheel, or split good and bad presets across two with a modifier key.",
+			text = "Hold the hotkey for a wheel of your presets. Use one wheel, or two, optionally splitting good and bad presets across two with a modifier key.",
 		},
 		{
 			page = "ignore", box = "Ignore by Relationship", side = "right",
@@ -167,16 +168,137 @@ ns.TOURS = {
 		{
 			page = "ignore", box = "Ignored Players", side = "right",
 			title = "Ignoring players",
-			text = "Or ignore specific players, which overrides the rules above. Add them here, or from any Worth Remembering right-click menu.",
+			text = "Or ignore specific players, which overrides the rules above. This can be used to add exceptions to the above 'Ignore by Relationship' rules.\n\nAdd them here, or from any Worth Remembering right-click menu.",
 		},
 		{
 			title = "All set!",
-			text = "That's the tour. Everything else is in these pages too, and most options explain themselves when you hover them.",
+			text = "That's the tour. Everything else is in these pages too, and most options explain themselves when you hover them.\n\nIf you have any questions, please don't hesitate to get in touch with me (top right of the About tab).",
 		},
 	},
 }
 
+-- a sample record so the tabs and the Details step have something to show. created on a
+-- fresh install (and kept), or for the length of a tour if it's missing
+local DEMO_NAME, DEMO_SURNAME = "Demo", "Player"
+-- vanilla race/class combos, valid on Forever and retail. race ids for C_CreatureInfo
+local DEMO_COMBOS = {
+	{ 1, "WARRIOR" }, { 1, "PALADIN" }, { 1, "MAGE" }, { 1, "PRIEST" },
+	{ 3, "HUNTER" }, { 3, "PALADIN" }, { 4, "DRUID" }, { 4, "ROGUE" }, { 7, "WARLOCK" },
+	{ 2, "SHAMAN" }, { 2, "HUNTER" }, { 5, "MAGE" }, { 5, "WARLOCK" }, { 6, "DRUID" },
+	{ 6, "WARRIOR" }, { 8, "PRIEST" }, { 8, "ROGUE" },
+}
+local ALLIANCE_RACES = { [1] = true, [3] = true, [4] = true, [7] = true }
+
+function ns.DemoPlayerKey()
+	return ns.BuildKey(DEMO_NAME, DEMO_SURNAME)
+end
+
+-- returns true if it had to create the record
+function ns.EnsureDemoPlayer()
+	local key = ns.DemoPlayerKey()
+	if not key or ns.GetPlayerRecord(key, false) then
+		return false
+	end
+	local combo = DEMO_COMBOS[math.random(#DEMO_COMBOS)]
+	local raceID, classFile = combo[1], combo[2]
+	local info = C_CreatureInfo and C_CreatureInfo.GetRaceInfo and C_CreatureInfo.GetRaceInfo(raceID)
+	local sex = math.random(2, 3)
+	local record = ns.GetPlayerRecord(key, true)
+	record.name, record.realmOrSurname = DEMO_NAME, DEMO_SURNAME
+	record.classFile, record.raceID = classFile, raceID
+	record.race = info and info.raceName or nil
+	record.faction = ALLIANCE_RACES[raceID] and "Alliance" or "Horde"
+	record.sex = sex
+	record.demo = true
+
+	local now, zone, me = time(), "Stranglethorn Vale", ns.GetMyFullName()
+	local myLevel = UnitLevel("player")
+	record.entries = {
+		{ time = now - 2 * 86400, zone = zone, yourLevel = myLevel, theirLevel = myLevel + 1, theirSex = sex,
+			loggedBy = me, source = "manual", delta = 5 },
+		{ time = now - 86400, zone = zone, yourLevel = myLevel, theirLevel = myLevel + 1, theirSex = sex,
+			loggedBy = me, source = "manual", featured = true,
+			text = "Saved our group when the tank went down, then stuck around to help me finish my quest. Super friendly!" },
+	}
+	ns.RecomputeStanding(record)
+	record.lastSeen, record.lastLocation, record.seenCount = now - 86400, zone, 2
+	if ns.RefreshAllTabs then
+		ns.RefreshAllTabs()
+	end
+	return true
+end
+
+-- what the hooked steps do: onEnter (before showing), onPlaced(box) (after the tour box
+-- is positioned), onLeave (on Next/Back/close)
+local nameplatePreviewWas, nearbyShownByTour, mainHiddenByTour
+
+local STEP_HOOKS = {
+	demoDetails = {
+		onEnter = function()
+			ns.ShowPlayerDetails(ns.DemoPlayerKey())
+		end,
+	},
+	-- an example radial left of the tour box and Quick-Add right of it, for the demo
+	-- player, with the main window out of the way
+	notePreviews = {
+		onEnter = function()
+			local main = ns.EnsureMainFrame()
+			mainHiddenByTour = main:IsShown()
+			main:Hide()
+		end,
+		onPlaced = function(box)
+			local key = ns.DemoPlayerKey()
+			local record = key and ns.GetPlayerRecord(key, false)
+			if not record then
+				return
+			end
+			ns.ShowQuickAddPreview(key, box)
+			local scale = box:GetEffectiveScale() / UIParent:GetEffectiveScale()
+			local left, bottom, _, height = box:GetRect()
+			ns.ShowRadialPreview({ key = key, name = record.name, classFile = record.classFile },
+				left * scale - 140, (bottom + height / 2) * scale)
+		end,
+		onLeave = function()
+			ns.HideQuickAddPreview()
+			ns.HideRadialPreview()
+			if mainHiddenByTour then
+				mainHiddenByTour = nil
+				ns.ShowOverview()
+			end
+		end,
+	},
+	-- nameplate icon preview on, and the Nearby window shown if it's turned off (without
+	-- changing the setting)
+	spotting = {
+		onEnter = function()
+			nameplatePreviewWas = ns.IsNameplateIconPreview and ns.IsNameplateIconPreview()
+			ns.SetNameplateIconPreview(true)
+			local nearby = ns.EnsureNearbyWindow and ns.EnsureNearbyWindow()
+			nearbyShownByTour = nearby and not nearby:IsShown()
+			if nearbyShownByTour then
+				nearby:Show()
+			end
+		end,
+		onLeave = function()
+			ns.SetNameplateIconPreview(nameplatePreviewWas)
+			if nearbyShownByTour and _G.WRNearbyFrame then
+				_G.WRNearbyFrame:Hide()
+			end
+			nearbyShownByTour = nil
+		end,
+	},
+}
+
+local function runHook(step, name, ...)
+	local hook = step and step.hook and STEP_HOOKS[step.hook]
+	if hook and hook[name] then
+		pcall(hook[name], ...)
+	end
+end
+
 local targets = ns.tourTargets
+
+ns.RegisterTourTarget("nearby", function() return _G.WRNearbyFrame end)
 
 
 local BOX_WIDTH, PAD, ARROW_GAP = 300, 14, 26
@@ -185,8 +307,8 @@ local ROTATION = { up = 180, down = 0, left = 90, right = 270 }
 -- side the box sits on -> direction its arrow points
 local ARROW_DIR = { below = "up", above = "down", right = "left", left = "right" }
 
-local callout, highlight, arrow, glow, proxy, boxProxy
-local tour, stepIndex
+local callout, highlight, arrow, glow, proxy, boxProxy, alsoArrow, alsoGlow, alsoHighlight, alsoProxy
+local tour, stepIndex, demoCreatedByTour
 
 -- size is set once at creation; the clamped helper swaps width/height itself
 local function rotate(tex, degrees)
@@ -240,13 +362,18 @@ local function buildCallout()
 	local close = CreateFrame("Button", nil, callout, "UIPanelCloseButton")
 	close:SetSize(24, 24)
 	close:SetPoint("TOPRIGHT", -2, -2)
-	close:SetScript("OnClick", function() ns.EndTour() end)
+	close:SetScript("OnClick", function()
+		ns.EndTour()
+		callout:Hide()
+	end)
 
 	callout.next = CreateFrame("Button", nil, callout, "UIPanelButtonTemplate")
 	callout.next:SetSize(80, 22)
 	callout.next:SetPoint("BOTTOMRIGHT", -PAD, PAD - 2)
 	callout.next:SetScript("OnClick", function()
-		if stepIndex < #tour then
+		if not (tour and stepIndex) then
+			callout:Hide()
+		elseif stepIndex < #tour then
 			ns.ShowTourStep(stepIndex + 1)
 		else
 			ns.EndTour()
@@ -258,6 +385,10 @@ local function buildCallout()
 	callout.back:SetPoint("RIGHT", callout.next, "LEFT", -6, 0)
 	callout.back:SetText("Back")
 	callout.back:SetScript("OnClick", function()
+		if not (tour and stepIndex) then
+			callout:Hide()
+			return
+		end
 		ns.ShowTourStep(stepIndex - 1)
 	end)
 
@@ -291,7 +422,32 @@ local function buildCallout()
 		highlight:SetBackdropColor(0, 0, 0, 0)
 	end
 
+	alsoArrow = callout:CreateTexture(nil, "ARTWORK")
+	alsoArrow:SetTexture(ARROW_FILE)
+	alsoArrow:SetTexCoord(0.78515625, 0.99218750, 0.54687500, 0.58789063)
+	alsoArrow:SetSize(37, 15)
+	alsoArrow:SetAlpha(0.8)
+	alsoGlow = callout:CreateTexture(nil, "BORDER")
+	alsoGlow:SetTexture(ARROW_FILE)
+	alsoGlow:SetTexCoord(0.40625000, 0.66015625, 0.77343750, 0.82812500)
+	alsoGlow:SetSize(46, 20)
+	alsoGlow:SetBlendMode("ADD")
+	alsoGlow:SetAlpha(0.2)
+	alsoGlow:SetPoint("CENTER", alsoArrow, "CENTER")
+
+	alsoHighlight = newGlowBox(nil)
+	alsoHighlight:SetFrameStrata("FULLSCREEN_DIALOG")
+	alsoHighlight:EnableMouse(false)
+	hideGlowPieces(alsoHighlight, { "BG", "ShadowTopLeft", "ShadowTopRight", "ShadowBottomLeft", "ShadowBottomRight",
+		"ShadowTop", "ShadowBottom", "ShadowLeft", "ShadowRight" })
+	if alsoHighlight.SetBackdropColor then
+		alsoHighlight:SetBackdropColor(0, 0, 0, 0)
+	end
+	-- the secondary pointer is a quieter version of the main one
+	alsoHighlight:SetAlpha(0.45)
+
 	proxy = CreateFrame("Frame", nil, UIParent)
+	alsoProxy = CreateFrame("Frame", nil, UIParent)
 	boxProxy = CreateFrame("Frame", nil, UIParent)
 end
 
@@ -380,7 +536,8 @@ local function fitSide(side, target)
 	return side
 end
 
-local function resolveTarget(name)
+local function resolveTarget(name, pairProxy)
+	pairProxy = pairProxy or proxy
 	local target = name and targets[name]
 	if type(target) == "function" then
 		target = target()
@@ -390,11 +547,11 @@ local function resolveTarget(name)
 		if not (first:IsVisible() and last:IsVisible()) then
 			return nil
 		end
-		proxy:ClearAllPoints()
-		proxy:SetPoint("TOPLEFT", first, "TOPLEFT")
-		proxy:SetPoint("BOTTOMRIGHT", last, "BOTTOMRIGHT")
-		proxy:Show()
-		return proxy
+		pairProxy:ClearAllPoints()
+		pairProxy:SetPoint("TOPLEFT", first, "TOPLEFT")
+		pairProxy:SetPoint("BOTTOMRIGHT", last, "BOTTOMRIGHT")
+		pairProxy:Show()
+		return pairProxy
 	end
 	if target and target.IsVisible and target:IsVisible() then
 		return target
@@ -402,7 +559,45 @@ local function resolveTarget(name)
 	return nil
 end
 
-local function place(step)
+-- the arrow sits on `side` of the target, pointing at it
+local ALSO_ARROW_DIR = { left = "right", right = "left", above = "down", below = "up" }
+-- room between the target and its box, so the glow border clears the text
+local ALSO_PAD = 8
+
+local function placeAlso(step)
+	alsoArrow:Hide()
+	alsoGlow:Hide()
+	alsoHighlight:Hide()
+	local target = step.also and resolveTarget(step.also, alsoProxy)
+	if not target then
+		return
+	end
+	alsoHighlight:ClearAllPoints()
+	alsoHighlight:SetPoint("TOPLEFT", target, "TOPLEFT", -ALSO_PAD, ALSO_PAD)
+	alsoHighlight:SetPoint("BOTTOMRIGHT", target, "BOTTOMRIGHT", ALSO_PAD, -ALSO_PAD)
+	alsoHighlight:SetFrameLevel(callout:GetFrameLevel() - 1)
+	alsoHighlight:Show()
+
+	local side = step.alsoSide or "left"
+	local dir = ALSO_ARROW_DIR[side] or "right"
+	rotate(alsoArrow, ROTATION[dir])
+	rotate(alsoGlow, ROTATION[dir])
+	alsoArrow:ClearAllPoints()
+	local gap = ALSO_PAD + 3
+	if side == "left" then
+		alsoArrow:SetPoint("RIGHT", target, "LEFT", -gap, 0)
+	elseif side == "right" then
+		alsoArrow:SetPoint("LEFT", target, "RIGHT", gap, 0)
+	elseif side == "above" then
+		alsoArrow:SetPoint("BOTTOM", target, "TOP", 0, gap)
+	else
+		alsoArrow:SetPoint("TOP", target, "BOTTOM", 0, -gap)
+	end
+	alsoArrow:Show()
+	alsoGlow:Show()
+end
+
+local function placeUnsafe(step)
 	callout.title:SetText(step.title or "")
 	callout.body:SetText(step.text or "")
 	callout.counter:SetText(stepIndex .. " / " .. #tour)
@@ -465,6 +660,23 @@ local function place(step)
 		end
 	end
 	callout:Show()
+	placeAlso(step)
+	runHook(step, "onPlaced", callout)
+end
+
+-- a failed placement still leaves a usable, centered box instead of a stuck one
+local function place(step)
+	local ok, err = pcall(placeUnsafe, step)
+	if not ok then
+		ns.Print("Tour step failed to place: " .. tostring(err))
+		callout:ClearAllPoints()
+		callout:SetPoint("CENTER", UIParent, "CENTER")
+		arrow:Hide()
+		glow:Hide()
+		highlight:Hide()
+		alsoHighlight:Hide()
+		callout:Show()
+	end
 end
 
 local function leaveStep(nextStep)
@@ -472,9 +684,7 @@ local function leaveStep(nextStep)
 	if not step then
 		return
 	end
-	if step.onLeave then
-		pcall(step.onLeave)
-	end
+	runHook(step, "onLeave")
 	if step.box and not (nextStep and nextStep.box == step.box) then
 		collapseBox(step.box)
 	end
@@ -497,9 +707,7 @@ function ns.ShowTourStep(index)
 	if step.box then
 		expandBox(step.box)
 	end
-	if step.onEnter then
-		pcall(step.onEnter)
-	end
+	runHook(step, "onEnter")
 	-- tab switches, box rebuilds and filter reflow settle on the next frame; a box is
 	-- scrolled to first, then measured a frame later
 	C_Timer.After(0, function()
@@ -531,6 +739,7 @@ function ns.StartTour(id)
 		leaveStep()
 	end
 	tour = steps
+	demoCreatedByTour = ns.EnsureDemoPlayer() or demoCreatedByTour
 	ns.ShowTourStep(1)
 end
 
@@ -543,6 +752,16 @@ function ns.EndTour()
 	if callout then
 		callout:Hide()
 		highlight:Hide()
+		alsoHighlight:Hide()
+	end
+	if demoCreatedByTour then
+		demoCreatedByTour = nil
+		local key = ns.DemoPlayerKey()
+		local record = key and ns.GetPlayerRecord(key, false)
+		if record and record.demo then
+			ns.DeletePlayerRecord(key)
+			ns.RefreshAllTabs()
+		end
 	end
 end
 

@@ -150,6 +150,7 @@ function ns.BuildAboutPanel(parent)
 	local patchCheckLabel = header:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 	patchCheckLabel:SetPoint("LEFT", patchCheck, "RIGHT", 2, 0)
 	patchCheckLabel:SetText("Show patch notes for new versions")
+	ns.RegisterTourTarget("about.patchNotes", { patchCheck, patchCheckLabel })
 	ns.AttachTooltip(patchCheck, "Opens this tab once after Worth Remembering updates to a new version.")
 
 	local tourButton = CreateFrame("Button", nil, header, "UIPanelButtonTemplate")
@@ -194,6 +195,7 @@ function ns.BuildAboutPanel(parent)
 	-- boxes exactly one text line tall, so every row sits the same distance apart
 	local lineHeight = math.ceil(contactHeading:GetStringHeight())
 
+	local contactWidth = contactHeading:GetStringWidth()
 	local function addContactLine(anchor, label, value)
 		local measure = header:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 		measure:SetText(value)
@@ -223,11 +225,18 @@ function ns.BuildAboutPanel(parent)
 		local labelText = header:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
 		labelText:SetPoint("RIGHT", valueBox, "LEFT", -4, 0)
 		labelText:SetText(label)
+		contactWidth = math.max(contactWidth, labelText:GetStringWidth() + 4 + width)
 		return valueBox
 	end
 
 	local emailBox = addContactLine(contactHeading, "Email:", "worthremembering.stark087@passmail.net")
-	addContactLine(emailBox, "Discord:", "maliceftw")
+	local discordBox = addContactLine(emailBox, "Discord:", "maliceftw")
+
+	local contactArea = CreateFrame("Frame", nil, header)
+	contactArea:SetPoint("TOPRIGHT", contactHeading, "TOPRIGHT")
+	contactArea:SetPoint("BOTTOM", discordBox, "BOTTOM")
+	contactArea:SetWidth(contactWidth)
+	ns.RegisterTourTarget("about.contact", contactArea)
 
 	local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
 

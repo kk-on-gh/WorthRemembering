@@ -388,7 +388,7 @@ end
 -- `autoClose`, when true, hides the popup right after a successful Add Entry. used by
 -- the macro/keybind/context-menu entry points, not the in-window ones (Players row
 -- click, Details tab), which stay open for adding several in a row.
-function ns.ShowQuickAdd(key, autoClose)
+function ns.ShowQuickAdd(key, autoClose, noFocus)
 	if not popup then
 		createPopup()
 	end
@@ -406,6 +406,9 @@ function ns.ShowQuickAdd(key, autoClose)
 	end
 	refresh()
 	popup:Show()
+	if noFocus then
+		return
+	end
 	-- deferred a frame: focusing synchronously in response to a keybind still lets that
 	-- same keystroke's character land in the box, since the key event hasn't finished
 	-- processing yet when the binding handler runs
@@ -585,4 +588,37 @@ function ns.QuickNoteTarget()
 	end
 	local action = isHover and ns.GetSettings().tapHoverAction or ns.GetSettings().tapTargetAction
 	ns.PerformTapAction(action, ns.IdentifyUnit(unit))
+end
+
+-- tour preview: shown next to `anchor` without taking keyboard focus; its saved spot
+-- is put back on hide
+local previewPoints
+
+function ns.ShowQuickAddPreview(key, anchor)
+	ns.ShowQuickAdd(key, false, true)
+	if not (popup and popup:IsShown()) then
+		return
+	end
+	if not previewPoints then
+		previewPoints = {}
+		for i = 1, popup:GetNumPoints() do
+			previewPoints[i] = { popup:GetPoint(i) }
+		end
+	end
+	popup:ClearAllPoints()
+	popup:SetPoint("LEFT", anchor, "RIGHT", 24, 0)
+end
+
+function ns.HideQuickAddPreview()
+	if not popup then
+		return
+	end
+	popup:Hide()
+	if previewPoints then
+		popup:ClearAllPoints()
+		for _, point in ipairs(previewPoints) do
+			popup:SetPoint(unpack(point))
+		end
+		previewPoints = nil
+	end
 end

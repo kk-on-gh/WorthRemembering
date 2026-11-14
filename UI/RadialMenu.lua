@@ -937,3 +937,39 @@ initFrame:SetScript("OnEvent", function()
 	-- full-screen click-eater stuck enabled. self-heals shortly after login regardless.
 	C_Timer.After(2, closeWheel)
 end)
+
+-- tour preview: a static wheel for identity at x, y (UIParent space), first wedge lit.
+-- no keybind, cursor tracking or click-catcher involved
+function ns.ShowRadialPreview(identity, x, y)
+	local presets = ns.GetRadialPresetSet(1)
+	if not presets or #presets == 0 then
+		return false
+	end
+	closeWheel()
+	openIdentity, openContext = identity, nil
+	openPresets = presets
+	ensureWheel()
+	updateActiveUnitDisplay()
+	ensureLabelWidgets(#presets)
+	for i, preset in ipairs(presets) do
+		setLabelText(labels[i], preset.label)
+		labels[i].presetColor = colorForPreset(preset)
+	end
+	positionLabels(#presets)
+	wheel.emptyText:Hide()
+	wheel.centerX, wheel.centerY = x, y
+	wheel:ClearAllPoints()
+	wheel:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
+	setHighlight(1)
+	wheel.pointer:SetRotation(math.pi / 2)
+	wheel.pointer:Show()
+	wheel:Show()
+	return true
+end
+
+function ns.HideRadialPreview()
+	if wheel then
+		wheel:Hide()
+	end
+	openIdentity, openContext, openPresets = nil, nil, nil
+end

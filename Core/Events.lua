@@ -44,6 +44,7 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
 			ns.UpdatedFromVersion = lastSeen
 			ns.SetLastSeenVersion(version)
 			if lastSeen == nil and #ns.GetAllPlayerKeys() == 0 then
+				ns.EnsureDemoPlayer()
 				C_Timer.After(2, function()
 					StaticPopup_Show("WR_TOUR_OFFER")
 				end)
