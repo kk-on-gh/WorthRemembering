@@ -15,6 +15,7 @@ All notable changes to Worth Remembering are documented here.
 - Minor UI adjustments
 
 ### Fixed
+- Times Seen barely counted the people you group with, since party and raid members' nameplates are skipped. Now someone joining your group counts as a sighting (and updates Last Seen), and leaving updates Last Seen.
 - On the Players tab, the ignore status filter could overlap the Columns dropdown when the window was narrow. It's now on the row above, after "Invert".
 - Checkboxes in tables (Multi-Select, the ignore list) sometimes drew with one edge thin or missing.
 

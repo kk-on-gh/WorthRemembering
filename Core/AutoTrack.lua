@@ -29,6 +29,11 @@ local partyGUIDs = {}
 -- partyGUIDs
 local partyJoinedAt = {}
 
+-- guid -> key (false until it resolves) of everyone grouped as of the last roster update,
+-- for Times Seen/Last Seen on joins and leaves. unlike partyGUIDs, a leave drops them,
+-- so rejoining counts again (subject to the seen-count cooldown)
+local presentKeys = {}
+
 -- seeds partyGUIDs with whoever's already grouped at load, no entries logged for them.
 -- otherwise a /reload resets this state and the next roster update looks like a batch
 -- of fresh joins. seeded to 0 (always long enough) since we don't actually know when
@@ -38,6 +43,7 @@ for _, unit in ipairs(getCurrentPartyUnits()) do
 	if guid then
 		partyGUIDs[guid] = true
 		partyJoinedAt[guid] = 0
+		presentKeys[guid] = false
 	end
 end
 
@@ -79,28 +85,55 @@ local function logAuto(key, identity, unit, source, repGain, note)
 	ns.RefreshAllTabs()
 end
 
+-- joining your group bumps Last Seen and Times Seen; leaving only bumps Last Seen
+local function markGroupSeen(key, guid, counts)
+	if not key or not ns.GetPlayerRecord(key, false) or ns.IsIgnored(key, "indicators", guid) then
+		return false
+	end
+	ns.TouchLastSeen(key, true)
+	if counts then
+		ns.IncrementSeenCount(key, true)
+	end
+	return true
+end
+
 local function onRosterUpdate()
 	local settings = ns.GetSettings().autoTrack
 	local option = settings.party
 
 	local units = getCurrentPartyUnits()
+	local nowPresent, changed = {}, false
+	for _, unit in ipairs(units) do
+		local guid = UnitGUID(unit)
+		if guid and not UnitIsUnit(unit, "player") then
+			local identity = ns.IdentifyUnit(unit)
+			nowPresent[guid] = identity and identity.key or presentKeys[guid] or false
+			if not partyGUIDs[guid] then
+				partyGUIDs[guid] = true
+				partyJoinedAt[guid] = time()
+				if identity and settings.enabled and option.enabled then
+					logAuto(identity.key, identity, unit, "auto-party", option.repGain, option.note)
+				end
+			end
+			if presentKeys[guid] == nil and identity then
+				changed = markGroupSeen(identity.key, guid, true) or changed
+			end
+		end
+	end
+	for guid, key in pairs(presentKeys) do
+		if nowPresent[guid] == nil and key then
+			changed = markGroupSeen(key, guid, false) or changed
+		end
+	end
+	presentKeys = nowPresent
+	if changed then
+		ns.RefreshAllTabs()
+	end
+
 	if #units == 0 then
 		-- fully ungrouped: only point tracking resets, rejoining later counts as fresh joins
 		partyGUIDs = {}
 		partyJoinedAt = {}
-		return
-	end
-
-	for _, unit in ipairs(units) do
-		local guid = UnitGUID(unit)
-		if guid and not partyGUIDs[guid] then
-			partyGUIDs[guid] = true
-			partyJoinedAt[guid] = time()
-			local identity = ns.IdentifyUnit(unit)
-			if identity and settings.enabled and option.enabled then
-				logAuto(identity.key, identity, unit, "auto-party", option.repGain, option.note)
-			end
-		end
 	end
 end
 

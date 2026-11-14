@@ -193,12 +193,13 @@ end
 
 -- stamps lastSeen from a nameplate sighting, independent of whether it logs an entry.
 -- only touches existing records, never creates one
-function ns.TouchLastSeen(key)
+-- force: a deliberate interaction (grouping), counted even while resting
+function ns.TouchLastSeen(key, force)
 	local record = ns.GetPlayerRecord(key, false)
 	if not record then
 		return
 	end
-	if ns.GetSettings().seenCountSkipWhileResting and IsResting() then
+	if not force and ns.GetSettings().seenCountSkipWhileResting and IsResting() then
 		return
 	end
 	record.lastSeen = time()
@@ -208,13 +209,13 @@ end
 -- bumps seen count, gated by seenCountCooldownMinutes so losing/regaining a nameplate
 -- briefly only counts once. own timestamp (lastSeenCountAt), separate from lastSeen
 -- which updates on every sighting
-function ns.IncrementSeenCount(key)
+function ns.IncrementSeenCount(key, force)
 	local record = ns.GetPlayerRecord(key, false)
 	if not record then
 		return
 	end
 	local settings = ns.GetSettings()
-	if settings.seenCountSkipWhileResting and IsResting() then
+	if not force and settings.seenCountSkipWhileResting and IsResting() then
 		return
 	end
 	local cooldownSeconds = (settings.seenCountCooldownMinutes or 5) * 60
