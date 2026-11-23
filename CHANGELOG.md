@@ -2,7 +2,7 @@
 
 All notable changes to Worth Remembering are documented here.
 
-## [1.3]
+## [1.3] - 2026-11-22
 
 ### Added
 - Themes, in Options > General > Main: Default (the usual gold and parchment), Dark, and EllesmereUI, which matches your EllesmereUI look, font and accent color. Dark and EllesmereUI also turn checkboxes into toggles, restyle the dropdown menus and the color picker, and switch the radial menu to its Ring style. Changes after a reload.

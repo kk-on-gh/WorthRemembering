@@ -5,7 +5,7 @@ local ns = WorthRemembering
 -- updated. most recent entry first.
 ns.CHANGELOG = {
 	{
-		version = "1.3", date = "2026-11-22", shipped = false,
+		version = "1.3", date = "2026-11-22", shipped = true,
 		sections = {
 			{ heading = "Added", items = {
 				"Themes, in Options > General > Main: Default (the usual gold and parchment), Dark, and EllesmereUI, which matches your EllesmereUI look, font and accent color. Dark and EllesmereUI also turn checkboxes into toggles, restyle the dropdown menus and the color picker, and switch the radial menu to its Ring style. Changes after a reload.",
