@@ -383,6 +383,9 @@ local function layoutRowArea(playerCount)
 	scrollChild:SetSize(width, math.max(playerCount or 0, 1) * ROW_HEIGHT)
 end
 
+-- set by the tour so hide-when-empty can't pull the window out from under it
+local forceShown = false
+
 local function refresh()
 	if not frame then
 		return
@@ -400,6 +403,11 @@ local function refresh()
 		end
 	end
 	table.sort(players, function(a, b) return (a.record.standing or 0) > (b.record.standing or 0) end)
+
+	-- before the alerts, so a flash on the first arrival plays on a visible frame
+	if ns.GetSettings().nearbyHideWhenEmpty and ns.GetSettings().nearbyWindowEnabled and not forceShown then
+		frame:SetShown(#players > 0)
+	end
 
 	local currentKeys = {}
 	for _, entry in ipairs(players) do
@@ -695,6 +703,7 @@ local function createFrame()
 	applyGrowDirectionLayout()
 	restorePosition()
 	applyIdleAlpha()
+	frame:SetShown(settings.nearbyWindowEnabled and not settings.nearbyHideWhenEmpty)
 end
 
 -- shown at login if enabled, not lazily on first window open. unlike the tab panels,
@@ -726,5 +735,23 @@ function ns.SetNearbyWindowShown(shown)
 		refresh()
 	elseif frame then
 		frame:Hide()
+	end
+end
+
+function ns.SetNearbyHideWhenEmpty(enabled)
+	local settings = ns.GetSettings()
+	settings.nearbyHideWhenEmpty = enabled and true or false
+	if frame and settings.nearbyWindowEnabled then
+		frame:Show()
+		refresh()
+	end
+end
+
+-- tour only: keeps the window up while a step points at it. clearing it re-applies
+-- hide-when-empty
+function ns.SetNearbyForceShown(on)
+	forceShown = on and true or false
+	if not forceShown then
+		refresh()
 	end
 end

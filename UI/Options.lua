@@ -490,14 +490,20 @@ end
 -- Boxed with its own border/title so every scale/direction/row-limit control here reads
 -- as belonging to the Nearby window, rather than blending into the General tab's rows.
 local function buildNearbyWindowControl(parent, y)
-	local box = createSectionBox(parent, y, 234, "Nearby Window")
+	local box = createSectionBox(parent, y, 256, "Nearby Window")
 
 	buildCheckbox(box, 8, -22, "Show the Nearby window (notable players with a visible nameplate)",
 		ns.GetSettings().nearbyWindowEnabled,
 		function(checked) ns.SetNearbyWindowShown(checked) end)
 
+	local hideEmptyCheck = buildCheckbox(box, 8, -44, "Hide it while nobody's listed",
+		ns.GetSettings().nearbyHideWhenEmpty,
+		function(checked) ns.SetNearbyHideWhenEmpty(checked) end)
+	setTooltip(hideEmptyCheck, "Hides the Nearby window entirely while it has no players to show, and brings it back when one appears.")
+	ns.RegisterTourTarget("options.nearby.hideEmpty", { hideEmptyCheck, hideEmptyCheck.label })
+
 	buildSlider(box, {
-		x = 10, y = -44, label = "Idle opacity", min = 0.1, max = 1.0, step = 0.05,
+		x = 10, y = -66, label = "Idle opacity", min = 0.1, max = 1.0, step = 0.05,
 		width = 150, isPercent = true,
 		getValue = function() return ns.GetSettings().nearbyIdleAlpha end,
 		setValue = function(value)
@@ -507,7 +513,7 @@ local function buildNearbyWindowControl(parent, y)
 	})
 
 	buildSlider(box, {
-		x = 190, y = -44, label = "Hover opacity", min = 0.1, max = 1.0, step = 0.05,
+		x = 190, y = -66, label = "Hover opacity", min = 0.1, max = 1.0, step = 0.05,
 		width = 150, isPercent = true,
 		getValue = function() return ns.GetSettings().nearbyHoverAlpha end,
 		setValue = function(value)
@@ -518,7 +524,7 @@ local function buildNearbyWindowControl(parent, y)
 
 	-- width works in both modes; height only with a static size, since auto-sizing sets
 	-- its own height from the player count. kept in step with the window's own resize grip
-	local SIZE_ROW_Y = -104
+	local SIZE_ROW_Y = -126
 	local syncingSize = false
 	local _, widthParts = buildSlider(box, {
 		x = 10, y = SIZE_ROW_Y, label = "Width", min = ns.NEARBY_MIN_WIDTH, max = 300, step = 1, width = 150,
@@ -550,7 +556,7 @@ local function buildNearbyWindowControl(parent, y)
 		syncingSize = false
 	end
 
-	local SCALE_ROW_Y = -164
+	local SCALE_ROW_Y = -186
 
 	local growDropdown
 	buildSlider(box, {
@@ -696,7 +702,7 @@ local function buildNearbyWindowControl(parent, y)
 		self:ClearFocus()
 	end)
 
-	local height = 332
+	local height = 354
 	box:SetHeight(height)
 	return y - height - 6
 end

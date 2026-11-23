@@ -72,6 +72,22 @@ ns.TOURS = {
 	},
 	-- "what's new" tours, one per version, started from that version's patch notes.
 	-- keep only the newest three, the About tab ignores older ones anyway
+	["v1.2.1"] = {
+		{
+			title = "What's new in 1.2.1",
+			text = "A quick look at what's new.",
+		},
+		{
+			page = "general", box = "Nearby Window", side = "right", marks = { "options.nearby.hideEmpty" },
+			title = "Nearby window",
+			text = "\"Hide it while nobody's listed\" tucks the Nearby window away while it's empty, and brings it back when someone notable shows up.",
+		},
+		{
+			tab = "about",
+			title = "That's all for 1.2.1",
+			text = "Thanks for using Worth Remembering!",
+		},
+	},
 	["v1.2"] = {
 		{
 			title = "What's new in 1.2",
@@ -347,6 +363,7 @@ local STEP_HOOKS = {
 		onEnter = function()
 			nameplatePreviewWas = ns.IsNameplateIconPreview and ns.IsNameplateIconPreview()
 			ns.SetNameplateIconPreview(true)
+			ns.SetNearbyForceShown(true)
 			local nearby = ns.EnsureNearbyWindow and ns.EnsureNearbyWindow()
 			nearbyShownByTour = nearby and not nearby:IsShown()
 			if nearbyShownByTour then
@@ -355,10 +372,12 @@ local STEP_HOOKS = {
 		end,
 		onLeave = function()
 			ns.SetNameplateIconPreview(nameplatePreviewWas)
-			if nearbyShownByTour and _G.WRNearbyFrame then
-				_G.WRNearbyFrame:Hide()
+			local nearby = _G.WRNearbyFrame
+			if nearbyShownByTour and nearby and not ns.GetSettings().nearbyWindowEnabled then
+				nearby:Hide()
 			end
 			nearbyShownByTour = nil
+			ns.SetNearbyForceShown(false)
 		end,
 	},
 }

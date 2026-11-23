@@ -416,7 +416,7 @@ local UI_SETTING_KEYS = {
 	"windowPoint", "windowRelativePoint", "windowX", "windowY", "windowWidth", "windowHeight",
 	"windowAlpha", "uiScale", "columnWidths", "columnVisibility", "columnOrder", "hiddenFilters", "windowPositions",
 	"hidePlayersStandingButtons", "hidePlayersNewButton", "multiSelectEnabled",
-	"nearbyWindowEnabled", "nearbyPoint", "nearbyScale", "nearbyIdleAlpha", "nearbyHoverAlpha",
+	"nearbyWindowEnabled", "nearbyHideWhenEmpty", "nearbyPoint", "nearbyScale", "nearbyIdleAlpha", "nearbyHoverAlpha",
 	"nearbyGrowDirection", "nearbyVisibleRowLimit",
 	"nearbyStaticSize", "nearbyStaticWidth", "nearbyStaticHeight",
 	"minimapIcon",

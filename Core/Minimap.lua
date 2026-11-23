@@ -53,7 +53,7 @@ local function showMenu()
 end
 
 local function createButton()
-	button = CreateFrame("Button", "WRMinimapButton", Minimap)
+	button = CreateFrame("Button", "WorthRememberingMinimapButton", Minimap)
 	button:SetSize(31, 31)
 	button:SetFrameStrata("MEDIUM")
 	button:SetFrameLevel(8)

@@ -294,6 +294,8 @@ ns.Defaults = {
 		-- has its own transparency, separate from the main window: dim while idle,
 		-- brighter on mouseover. Position is nil until the window has been dragged once.
 		nearbyWindowEnabled = true,
+		-- hidden while it has nobody to list, without changing nearbyWindowEnabled
+		nearbyHideWhenEmpty = false,
 		nearbyIdleAlpha = 0.5,
 		nearbyHoverAlpha = 0.9,
 		nearbyScale = 1.0,

@@ -5,6 +5,17 @@ local ns = WorthRemembering
 -- updated. most recent entry first.
 ns.CHANGELOG = {
 	{
+		version = "1.2.1", date = "2026-11-15", shipped = false,
+		sections = {
+			{ heading = "Added", items = {
+				"\"Hide it while nobody's listed\" in Options > General > Nearby Window: hides the Nearby window entirely while it's empty and brings it back when a notable player shows up. Off by default.",
+			}},
+			{ heading = "Changed", items = {
+				"The minimap button now shows its full name in minimap button collectors such as EllesmereUI's flyout. If you had ungrouped it in EllesmereUI, ungroup it again once, since EllesmereUI remembers ungrouped buttons by name.",
+			}},
+		},
+	},
+	{
 		version = "1.2", date = "2026-11-14", shipped = true,
 		sections = {
 			{ heading = "Added", items = {

@@ -2,6 +2,14 @@
 
 All notable changes to Worth Remembering are documented here.
 
+## [1.2.1]
+
+### Added
+- "Hide it while nobody's listed" in Options > General > Nearby Window: hides the Nearby window entirely while it's empty and brings it back when a notable player shows up. Off by default.
+
+### Changed
+- The minimap button now shows its full name in minimap button collectors such as EllesmereUI's flyout. If you had ungrouped it in EllesmereUI, ungroup it again once, since EllesmereUI remembers ungrouped buttons by name.
+
 ## [1.2] - 2026-11-14
 
 ### Added
