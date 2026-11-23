@@ -1,4 +1,16 @@
 local ns = WorthRemembering
+local Skin = ns.Skin
+
+StaticPopupDialogs["WR_SKIN_RELOAD"] = {
+	text = "Worth Remembering needs to reload your UI to change its look.",
+	button1 = "Reload Now",
+	button2 = "Later",
+	OnAccept = function() ReloadUI() end,
+	timeout = 0,
+	whileDead = true,
+	hideOnEscape = true,
+	preferredIndex = 3,
+}
 
 StaticPopupDialogs["WR_CONFIRM_CLEAR_DATABASE"] = {
 	text = "Delete ALL Worth Remembering notes and standing history for every player, on every character? This cannot be undone.",
@@ -126,7 +138,7 @@ end
 local function buildCheckbox(parent, x, y, text, checked, onClick)
 	local check = ns.CreateSmallCheckbox(parent, 24, checked, onClick)
 	check:SetPoint("TOPLEFT", x, y)
-	local label = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	local label = Skin.Text(parent, "ARTWORK", "GameFontHighlightSmall")
 	label:SetPoint("LEFT", check, "RIGHT", 4, 0)
 	label:SetText(text)
 	check.label = label
@@ -140,7 +152,7 @@ local SLIDER_BLOCK_HEIGHT = 52
 local setTooltip = ns.AttachTooltip
 
 local function buildSlider(parent, opts)
-	local label = parent:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local label = Skin.Text(parent, "ARTWORK", "GameFontNormalSmall")
 	label:SetPoint("TOPLEFT", opts.x, opts.y)
 	label:SetText(opts.label)
 
@@ -154,11 +166,11 @@ local function buildSlider(parent, opts)
 		opts.getValue, function() end)
 	slider:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 2, -12)
 
-	local lowText = parent:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local lowText = Skin.Text(parent, "ARTWORK", "GameFontDisableSmall")
 	lowText:SetPoint("TOPLEFT", slider, "BOTTOMLEFT", 0, -2)
 	lowText:SetText(formatValue(opts.min) .. (opts.isPercent and "%" or ""))
 
-	local highText = parent:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local highText = Skin.Text(parent, "ARTWORK", "GameFontDisableSmall")
 	highText:SetPoint("TOPRIGHT", slider, "BOTTOMRIGHT", 0, -2)
 	highText:SetText(formatValue(opts.max) .. (opts.isPercent and "%" or ""))
 
@@ -218,11 +230,20 @@ local function createSectionBox(parent, y, height, title)
 	box:SetPoint("TOPRIGHT", -12, y)
 	box:SetHeight(height)
 	ns.ApplyPanelBackdrop(box, 0.4)
+	-- the box's own art (a theme draws it on child frames), kept when collapsed
+	box.chrome = {}
+	for _, piece in ipairs({ box:GetChildren() }) do
+		box.chrome[piece] = true
+	end
+	for _, piece in ipairs({ box:GetRegions() }) do
+		box.chrome[piece] = true
+	end
 
-	local titleText = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local titleText = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	titleText:SetPoint("TOPLEFT", 8, -6)
 	titleText:SetText(title)
 	box.titleText = titleText
+	Skin.Section(titleText)
 
 	if title then
 		box.tourKey = title
@@ -247,11 +268,15 @@ local function createDisclosure(box, expanded, onClick)
 	local toggleButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
 	toggleButton:SetSize(18, 16)
 	toggleButton:SetPoint("TOPLEFT", 5, -4)
-	local toggleTint = toggleButton:CreateTexture(nil, "ARTWORK", nil, -1)
-	toggleTint:SetPoint("TOPLEFT", 3, -3)
-	toggleTint:SetPoint("BOTTOMRIGHT", -3, 3)
-	toggleTint:SetColorTexture(0.6, 0.18, 0.18, 0.65)
+	Skin.Button(toggleButton)
+	if not Skin.IsActive() then
+		local toggleTint = toggleButton:CreateTexture(nil, "ARTWORK", nil, -1)
+		toggleTint:SetPoint("TOPLEFT", 3, -3)
+		toggleTint:SetPoint("BOTTOMRIGHT", -3, 3)
+		toggleTint:SetColorTexture(0.6, 0.18, 0.18, 0.65)
+	end
 	toggleButton:SetText(expanded and "-" or "+")
+	Skin.Sign(toggleButton, expanded and "-" or "+")
 	toggleButton:SetScript("OnClick", onClick)
 
 	local title = box.titleText
@@ -287,10 +312,12 @@ local function wrapCollapsible(expandedState, key, builder, parent, y, onToggle)
 			end
 		end
 		for _, child in ipairs({ box:GetChildren() }) do
-			child:Hide()
+			if not box.chrome[child] then
+				child:Hide()
+			end
 		end
 		for _, region in ipairs({ box:GetRegions() }) do
-			if not keep[region] then
+			if not (keep[region] or box.chrome[region]) then
 				region:Hide()
 			end
 		end
@@ -303,6 +330,103 @@ local function wrapCollapsible(expandedState, key, builder, parent, y, onToggle)
 		onToggle()
 	end)
 	return nextY
+end
+
+local function themeOptions()
+	local options = {
+		{ value = "default", text = "Default" },
+		{ value = "dark", text = "Dark" },
+	}
+	if Skin.IsAvailable() then
+		options[3] = { value = "ellesmere", text = "EllesmereUI" }
+	elseif ns.GetSettings().theme == "ellesmere" then
+		options[3] = { value = "ellesmere", text = "EllesmereUI (not loaded)" }
+	end
+	return options
+end
+
+local function themeTooltip()
+	local text = "How Worth Remembering's windows look. Changes after a reload.\n\n"
+		.. "Default: gold and parchment.\n"
+		.. "Dark: flat and dark, with gold accents.\n"
+		.. "EllesmereUI: your EllesmereUI look, font and accent color. Needs its Blizzard Skins+ module, "
+		.. "with Worth Remembering left on under Window Skins > Third-Party Addons. Without them it uses Dark."
+	if Skin.RequestedTheme() == "ellesmere" and Skin.Theme() == "dark" then
+		text = text .. "\n\n|cffff6060Using Dark right now: EllesmereUI's skinning is off, or was turned on after Worth Remembering opened.|r"
+	end
+	return text
+end
+
+local function fontOptions()
+	local saved = ns.GetSettings().font
+	local options = { { value = "", text = "Theme default" } }
+	local found = saved == ""
+	for _, font in ipairs(Skin.ListFonts()) do
+		options[#options + 1] = { value = font.name, text = font.name, font = font.path }
+		found = found or font.name == saved
+	end
+	if not found then
+		options[#options + 1] = { value = saved, text = saved .. " (missing)" }
+	end
+	return options
+end
+
+local function fontTooltip()
+	local text = "The font for Worth Remembering's text. Changes after a reload.\n\n"
+		.. "Lists the game's own fonts and any your other addons share (through LibSharedMedia).\n\n"
+		.. "Theme default: the game's font, or your EllesmereUI font with that theme. "
+		.. "EllesmereUI's tab labels always use its own font."
+	if Skin.FontMissing() then
+		text = text .. "\n\n|cffff6060Your font wasn't found, so the theme's own is in use. Was its addon turned off?|r"
+	end
+	return text
+end
+
+local function promptSkinReload()
+	local settings = ns.GetSettings()
+	if settings.theme ~= Skin.RequestedTheme() or settings.font ~= Skin.RequestedFont() then
+		StaticPopup_Show("WR_SKIN_RELOAD")
+	else
+		StaticPopup_Hide("WR_SKIN_RELOAD")
+	end
+end
+
+local DISABLE_PLACES = {
+	{ key = "party", label = "In a dungeon" },
+	{ key = "raid", label = "In a raid" },
+	{ key = "pvp", label = "In a battleground" },
+	{ key = "arena", label = "In an arena" },
+	{ key = "scenario", label = "In a delve or scenario", tip = "Delves and scenarios only exist on retail." },
+	{ key = "resting", label = "Resting (inn or city)" },
+}
+
+local DISABLED_MEANS = "Nothing runs on its own: no auto-adds, nameplate icons, tooltip lines, chat or Group Finder tags, "
+	.. "right-click menu entries, Quick Note hotkey, radial or macros, Nearby window or alerts, and no popups.\n\n"
+	.. "/wr and the minimap button still open the window, and you can still add notes there by hand."
+
+local function buildDisableBox(parent, y)
+	local height = 128
+	local box = createSectionBox(parent, y, height, "Disabling")
+	local disable = ns.GetSettings().disable
+
+	local entire = buildCheckbox(box, 8, -22, "Disable Worth Remembering entirely", disable.all,
+		function(checked) ns.SetDisabledEntirely(checked) end)
+	setTooltip(entire, "Turns Worth Remembering off until you turn it back on (here, /wr on, or the minimap button's menu).\n\n" .. DISABLED_MEANS)
+
+	local whileLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
+	whileLabel:SetPoint("TOPLEFT", 12, -56)
+	whileLabel:SetText("Disable Worth Remembering while:")
+
+	local last
+	for i, place in ipairs(DISABLE_PLACES) do
+		local col, row = (i - 1) % 3, math.floor((i - 1) / 3)
+		local check = buildCheckbox(box, 8 + col * 200, -72 - row * 24, place.label, disable[place.key],
+			function(checked) ns.SetDisabledWhile(place.key, checked) end)
+		setTooltip(check, (place.tip and (place.tip .. "\n\n") or "") .. "Turns itself back on when you leave.\n\n" .. DISABLED_MEANS)
+		last = check
+	end
+	ns.RegisterTourTarget("options.disable", { entire, last.label })
+	return y - height - 6
 end
 
 local function buildWindowBox(parent, y)
@@ -338,7 +462,7 @@ local function buildWindowBox(parent, y)
 		end,
 	})
 
-	local timeLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local timeLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	timeLabel:SetPoint("TOPLEFT", 10, -90)
 	timeLabel:SetText("Time format")
 	local timeDropdown = ns.CreateDropdown(box, {
@@ -355,7 +479,7 @@ local function buildWindowBox(parent, y)
 		140, 20)
 	timeDropdown:SetPoint("TOPLEFT", timeLabel, "BOTTOMLEFT", 2, -4)
 
-	local dateLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local dateLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	dateLabel:SetPoint("TOPLEFT", 190, -90)
 	dateLabel:SetText("Date format")
 	local dateDropdown = ns.CreateDropdown(box, {
@@ -373,7 +497,7 @@ local function buildWindowBox(parent, y)
 		140, 20)
 	dateDropdown:SetPoint("TOPLEFT", dateLabel, "BOTTOMLEFT", 2, -4)
 
-	local bodyStyleLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local bodyStyleLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	bodyStyleLabel:SetPoint("TOPLEFT", 10, -134)
 	bodyStyleLabel:SetText("Body type display")
 	local bodyStyleDropdown = ns.CreateDropdown(box, {
@@ -389,7 +513,7 @@ local function buildWindowBox(parent, y)
 	bodyStyleDropdown:SetPoint("TOPLEFT", bodyStyleLabel, "BOTTOMLEFT", 2, -4)
 	setTooltip(bodyStyleDropdown, "How a player's body type is shown on the Players and History tabs.")
 
-	local bodyLabelLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local bodyLabelLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	bodyLabelLabel:SetPoint("TOPLEFT", 190, -134)
 	bodyLabelLabel:SetText("Body label")
 	local bodyLabelDropdown = ns.CreateDropdown(box, {
@@ -404,6 +528,33 @@ local function buildWindowBox(parent, y)
 		140, 20)
 	bodyLabelDropdown:SetPoint("TOPLEFT", bodyLabelLabel, "BOTTOMLEFT", 2, -4)
 	setTooltip(bodyLabelDropdown, "What that column is titled.")
+
+	local themeLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
+	themeLabel:SetPoint("TOPLEFT", 370, -90)
+	themeLabel:SetText("Theme")
+	local themeDropdown = ns.CreateDropdown(box, themeOptions,
+		function(value) return ns.GetSettings().theme == value end,
+		function(value)
+			ns.GetSettings().theme = value
+			promptSkinReload()
+		end,
+		160, 20)
+	themeDropdown:SetPoint("TOPLEFT", themeLabel, "BOTTOMLEFT", 2, -4)
+	ns.AttachHookTooltip(themeDropdown, themeTooltip)
+
+	local fontLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
+	fontLabel:SetPoint("TOPLEFT", 370, -134)
+	fontLabel:SetText("Font")
+	local fontDropdown = ns.CreateDropdown(box, fontOptions,
+		function(value) return ns.GetSettings().font == value end,
+		function(value)
+			ns.GetSettings().font = value
+			promptSkinReload()
+		end,
+		160, 20, 320)
+	fontDropdown:SetPoint("TOPLEFT", fontLabel, "BOTTOMLEFT", 2, -4)
+	ns.AttachHookTooltip(fontDropdown, fontTooltip)
+	ns.RegisterTourTarget("options.look", { themeLabel, fontDropdown })
 
 	buildCheckbox(box, 10, -176, "Hide the +/- standing buttons (Players tab)",
 		ns.GetSettings().hidePlayersStandingButtons,
@@ -437,7 +588,7 @@ local function buildStandingBox(parent, y)
 	local height = 64
 	local box = createSectionBox(parent, y, height, "Standing")
 
-	local neutralLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local neutralLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	neutralLabel:SetPoint("TOPLEFT", 10, -26)
 	neutralLabel:SetText("Neutral band (+/-)")
 	local neutralBox = ns.CreateSmallEditBox(box, 30, 14, true)
@@ -464,7 +615,7 @@ local function buildStandingBox(parent, y)
 		self:ClearFocus()
 	end)
 
-	local shiftLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local shiftLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	shiftLabel:SetPoint("TOPLEFT", 190, -26)
 	shiftLabel:SetText("Shift-click +/- amount")
 	local shiftBox = ns.CreateSmallEditBox(box, 30, 14, true)
@@ -568,7 +719,7 @@ local function buildNearbyWindowControl(parent, y)
 		end,
 	})
 
-	local growLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local growLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	growLabel:SetPoint("TOPLEFT", 190, SCALE_ROW_Y)
 	growLabel:SetText("Growth direction")
 	growDropdown = ns.CreateDropdown(box, {
@@ -608,7 +759,7 @@ local function buildNearbyWindowControl(parent, y)
 	-- while static size is on.
 	growDropdown:SetEnabled(not ns.GetSettings().nearbyStaticSize)
 
-	limitLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	limitLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	limitLabel:SetPoint("TOPLEFT", 10, staticCheckY - 27)
 	limitLabel:SetText("Visible row limit |cffffffff(scrolls beyond this; ignored when using a static size)|r")
 
@@ -640,7 +791,7 @@ local function buildNearbyWindowControl(parent, y)
 		{ value = "nothing", text = "Nothing" },
 	}
 
-	local singleLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local singleLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	singleLabel:SetPoint("TOPLEFT", 10, staticCheckY - 57)
 	singleLabel:SetText("Single click")
 	local singleDropdown = ns.CreateDropdown(box, ROW_CLICK_OPTIONS,
@@ -650,7 +801,7 @@ local function buildNearbyWindowControl(parent, y)
 	singleDropdown:SetPoint("LEFT", singleLabel, "RIGHT", 6, 0)
 	setTooltip(singleDropdown, "What clicking a player's row in the Nearby window does. Target only works out of combat (the game doesn't allow addons to target in combat).")
 
-	local doubleLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local doubleLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	doubleLabel:SetPoint("LEFT", singleDropdown, "RIGHT", 24, 0)
 	doubleLabel:SetText("Double click")
 	local doubleDropdown = ns.CreateDropdown(box, ROW_CLICK_OPTIONS,
@@ -660,7 +811,7 @@ local function buildNearbyWindowControl(parent, y)
 	doubleDropdown:SetPoint("LEFT", doubleLabel, "RIGHT", 6, 0)
 	setTooltip(doubleDropdown, "What double-clicking a player's row does. Set to Nothing and a single click responds instantly, with no wait for a possible second click. Target only works out of combat.")
 
-	local speedLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local speedLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	speedLabel:SetPoint("TOPLEFT", 10, staticCheckY - 85)
 	speedLabel:SetText("Double-click speed (ms)")
 	local speedBox = ns.CreateSmallEditBox(box, 40, 14, true)
@@ -680,7 +831,7 @@ local function buildNearbyWindowControl(parent, y)
 		self:ClearFocus()
 	end)
 
-	local holdLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local holdLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	holdLabel:SetPoint("LEFT", speedBox, "RIGHT", 24, 0)
 	holdLabel:SetText("Hold for (s)")
 	local holdBox = ns.CreateSmallEditBox(box, 40, 14, true)
@@ -807,7 +958,7 @@ local function buildFiltersBox(parent, y)
 
 	local labels = {}
 	for i, def in ipairs(FILTER_TABS) do
-		local label = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		local label = Skin.Text(box, "ARTWORK", "GameFontHighlightSmall")
 		label:SetPoint("TOPLEFT", 12, -28 - (i - 1) * 26)
 		label:SetText(def.label)
 		labels[i] = label
@@ -879,7 +1030,7 @@ local function buildTooltipContextBox(parent, y)
 	tooltipCheck:SetPoint("TOPLEFT", 8, -22)
 	ns.AttachTooltip(tooltipCheck, "Adds a line to notable players' tooltips, showing whichever info is selected here.")
 
-	tooltipLabel = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	tooltipLabel = Skin.Text(box, "ARTWORK", "GameFontHighlightSmall")
 	tooltipLabel:SetPoint("LEFT", tooltipCheck, "RIGHT", 4, 0)
 	tooltipLabel:SetText("Tooltip")
 
@@ -903,7 +1054,7 @@ local function buildTooltipContextBox(parent, y)
 	menuCheck:SetPoint("TOPLEFT", tooltipCheck, "BOTTOMLEFT", 0, -5)
 	ns.AttachTooltip(menuCheck, "Adds Add Note/Show Details/Delete Player to a notable player's right-click menu.")
 
-	menuLabel = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	menuLabel = Skin.Text(box, "ARTWORK", "GameFontHighlightSmall")
 	menuLabel:SetPoint("LEFT", menuCheck, "RIGHT", 4, 0)
 	menuLabel:SetText("Right-click \"Worth Remembering\" menu")
 	setContainerEnabled(menuLabel, ns.GetSettings().contextMenuEnabled)
@@ -944,6 +1095,7 @@ local function buildKeybindControl(parent, y)
 	local box, titleText = createSectionBox(parent, y, height, "Global Hotkey")
 
 	local helpButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+	Skin.Button(helpButton)
 	helpButton:SetSize(16, 16)
 	helpButton:SetText("?")
 	helpButton:SetPoint("LEFT", titleText, "RIGHT", 4, 0)
@@ -951,16 +1103,18 @@ local function buildKeybindControl(parent, y)
 	ns.AttachHookTooltip(helpButton, GLOBAL_HOTKEY_HELP_TEXT)
 
 	local keyButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+	Skin.Button(keyButton)
 	keyButton:SetSize(130, 20)
 	keyButton:SetPoint("TOPLEFT", 10, -24)
 	keyButton:SetText(quickNoteKeyText())
 
 	local clearButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+	Skin.Button(clearButton)
 	clearButton:SetSize(50, 20)
 	clearButton:SetPoint("LEFT", keyButton, "RIGHT", 6, 0)
 	clearButton:SetText("Clear")
 
-	local hint = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local hint = Skin.Text(box, "ARTWORK", "GameFontDisableSmall")
 	hint:SetPoint("TOPLEFT", keyButton, "BOTTOMLEFT", -2, -4)
 	hint:SetText("Click the key button, then press a key. Escape cancels.")
 
@@ -977,7 +1131,7 @@ local function buildKeybindControl(parent, y)
 		end)
 	fallbackCheck:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -12)
 
-	fallbackLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	fallbackLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	fallbackLabel:SetPoint("LEFT", fallbackCheck, "RIGHT", 4, 0)
 	fallbackLabel:SetText("With no target, open window to")
 
@@ -1002,7 +1156,7 @@ local function buildKeybindControl(parent, y)
 			setContainerEnabled(targetLabel, checked)
 		end)
 	targetCheck:SetPoint("TOPLEFT", fallbackCheck, "BOTTOMLEFT", 0, -10)
-	targetLabel = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	targetLabel = Skin.Text(box, "ARTWORK", "GameFontHighlightSmall")
 	targetLabel:SetPoint("LEFT", targetCheck, "RIGHT", 4, 0)
 	targetLabel:SetText("With a target, open")
 
@@ -1027,7 +1181,7 @@ local function buildKeybindControl(parent, y)
 	-- taller than a plain text line, so a fixed offset sized for the old label-only
 	-- layout overlapped this with the row above it
 	hoverCheck:SetPoint("TOPLEFT", targetCheck, "BOTTOMLEFT", 0, -10)
-	hoverLabel = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	hoverLabel = Skin.Text(box, "ARTWORK", "GameFontHighlightSmall")
 	hoverLabel:SetPoint("LEFT", hoverCheck, "RIGHT", 4, 0)
 	hoverLabel:SetText("While hovering (not targeting), open")
 
@@ -1138,6 +1292,7 @@ local function buildDangerZoneBox(parent, y, onToggle)
 		local rowY = -COLLAPSED_HEIGHT - 2
 		for _, action in ipairs(DANGER_ZONE_ACTIONS) do
 			local button = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+			Skin.Button(button)
 			button:SetSize(140, 20)
 			button:SetText(action.text)
 			button:SetPoint("TOPLEFT", 10, rowY)
@@ -1149,7 +1304,7 @@ local function buildDangerZoneBox(parent, y, onToggle)
 				end
 			end)
 
-			local hint = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+			local hint = Skin.Text(box, "ARTWORK", "GameFontDisableSmall")
 			hint:SetPoint("LEFT", button, "RIGHT", 8, 0)
 			hint:SetText(action.hint)
 			ns.RegisterTourTarget("options.danger." .. action.text:lower(), { button, hint })
@@ -1194,7 +1349,7 @@ local function buildAutoPruneControl(parent, y)
 		summaryText, 220)
 	dropdown:SetPoint("TOPLEFT", 10, -48)
 
-	local daysLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local daysLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	daysLabel:SetPoint("LEFT", dropdown, "RIGHT", 16, 0)
 	daysLabel:SetText("Days")
 
@@ -1219,7 +1374,7 @@ local function buildAutoPruneControl(parent, y)
 		settings.enabled,
 		function(checked) settings.enabled = checked end)
 
-	local hint = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local hint = Skin.Text(box, "ARTWORK", "GameFontDisableSmall")
 	hint:SetPoint("TOPLEFT", 10, -78)
 	hint:SetPoint("RIGHT", -10, 0)
 	hint:SetJustifyH("LEFT")
@@ -1241,14 +1396,16 @@ end
 local function createColorSwatch(parent, getColor, setColor)
 	local swatch = CreateFrame("Button", nil, parent, "BackdropTemplate")
 	swatch:SetSize(20, 20)
-	swatch:SetBackdrop({
-		edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-		edgeSize = 8,
-		insets = { left = 2, right = 2, top = 2, bottom = 2 },
-	})
-	swatch:SetBackdropBorderColor(1, 0.82, 0, 0.5)
+	if not Skin.Panel(swatch, "field") then
+		swatch:SetBackdrop({
+			edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+			edgeSize = 8,
+			insets = { left = 2, right = 2, top = 2, bottom = 2 },
+		})
+		swatch:SetBackdropBorderColor(1, 0.82, 0, 0.5)
+	end
 
-	local tex = swatch:CreateTexture(nil, "ARTWORK")
+	local tex = Skin.CreateArtHost(swatch):CreateTexture(nil, "ARTWORK")
 	tex:SetPoint("TOPLEFT", 3, -3)
 	tex:SetPoint("BOTTOMRIGHT", -3, 3)
 
@@ -1259,6 +1416,16 @@ local function createColorSwatch(parent, getColor, setColor)
 
 	swatch:SetScript("OnClick", function()
 		local r, g, b = getColor()
+		local themed = ns.ShowColorPicker(r, g, b, function(nr, ng, nb)
+			setColor(nr, ng, nb)
+			refresh()
+		end, function()
+			setColor(r, g, b)
+			refresh()
+		end)
+		if themed then
+			return
+		end
 		local info = {
 			r = r, g = g, b = b,
 			swatchFunc = function()
@@ -1351,6 +1518,7 @@ end
 
 local function buildRepBracketControl(parent)
 	local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+	Skin.ScrollBar(scroll)
 	ns.SetGentleScroll(scroll)
 	scroll:SetPoint("TOPLEFT", 0, 0)
 	scroll:SetPoint("BOTTOMRIGHT", -34, 0)
@@ -1467,7 +1635,7 @@ local function buildRepBracketControl(parent)
 		end
 
 		for _, rowIndex in ipairs({ 1, 2, 3 }) do
-			local rowLabel = customRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+			local rowLabel = Skin.Text(customRow, "ARTWORK", "GameFontNormalSmall")
 			rowLabel:SetWidth(LABEL_WIDTH)
 			rowLabel:SetJustifyH("LEFT")
 			rowLabel:SetText(ROW_LABELS[rowIndex])
@@ -1475,7 +1643,7 @@ local function buildRepBracketControl(parent)
 		end
 
 		for i, field in ipairs(FIELDS) do
-			local rangeLabel = customRow:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+			local rangeLabel = Skin.Text(customRow, "ARTWORK", "GameFontDisableSmall")
 			rangeLabel:SetText(bracketRangeText(field))
 			rangeLabels[#rangeLabels + 1] = { label = rangeLabel, field = field }
 
@@ -1509,7 +1677,7 @@ local function buildRepBracketControl(parent)
 			swatches[#swatches + 1] = swatch
 		end
 
-		local presetLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		local presetLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 		presetLabel:SetPoint("TOPLEFT", 10, -24)
 		presetLabel:SetText("Preset")
 
@@ -1527,7 +1695,7 @@ local function buildRepBracketControl(parent)
 			200)
 		dropdown:SetPoint("TOPLEFT", presetLabel, "BOTTOMLEFT", 4, -4)
 
-		local colorsLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		local colorsLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 		colorsLabel:SetPoint("LEFT", presetLabel, "LEFT", 240, 0)
 		colorsLabel:SetText("Colors")
 
@@ -1554,7 +1722,7 @@ local function buildRepBracketControl(parent)
 				refreshAllBracketDisplays()
 			end)
 			labelReset:SetPoint("TOPLEFT", dropdown, "BOTTOMLEFT", 0, -22)
-			local labelResetText = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+			local labelResetText = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 			labelResetText:SetPoint("BOTTOMLEFT", labelReset, "TOPLEFT", -4, 3)
 			labelResetText:SetText("Reset custom labels to:")
 		end
@@ -1566,7 +1734,7 @@ local function buildRepBracketControl(parent)
 				refreshAllBracketDisplays()
 			end)
 			colorReset:SetPoint("TOPLEFT", colorDropdown, "BOTTOMLEFT", 0, -22)
-			local colorResetText = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+			local colorResetText = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 			colorResetText:SetPoint("BOTTOMLEFT", colorReset, "TOPLEFT", -4, 3)
 			colorResetText:SetText("Reset custom colors to:")
 		end
@@ -1591,6 +1759,7 @@ local generalBoxesExpanded = {}
 
 local function buildGeneralPanel(parent)
 	local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+	Skin.ScrollBar(scroll)
 	ns.SetGentleScroll(scroll)
 	scroll:SetPoint("TOPLEFT", 0, 0)
 	scroll:SetPoint("BOTTOMRIGHT", -34, 0)
@@ -1613,6 +1782,7 @@ local function buildGeneralPanel(parent)
 		{ key = "tooltip", build = buildTooltipContextBox },
 		{ key = "lfg", build = buildLFGIntegrationControl },
 		{ key = "autoPrune", build = buildAutoPruneControl },
+		{ key = "disable", build = buildDisableBox },
 	}
 
 	local layout
@@ -1649,24 +1819,28 @@ local function createHelpPopupFrame(globalName, width, height, title)
 	popup:RegisterForDrag("LeftButton")
 	popup:SetScript("OnDragStart", popup.StartMoving)
 	popup:SetScript("OnDragStop", popup.StopMovingOrSizing)
-	popup:SetBackdrop({
-		edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
-		edgeSize = 24,
-		insets = { left = 8, right = 8, top = 8, bottom = 8 },
-	})
+	if not Skin.Window(popup) then
+		popup:SetBackdrop({
+			edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
+			edgeSize = 24,
+			insets = { left = 8, right = 8, top = 8, bottom = 8 },
+		})
 
-	local fill = popup:CreateTexture(nil, "BACKGROUND", nil, -8)
-	fill:SetPoint("TOPLEFT", 8, -8)
-	fill:SetPoint("BOTTOMRIGHT", -8, 8)
-	fill:SetColorTexture(0.1, 0.08, 0.06, 1)
+		local fill = popup:CreateTexture(nil, "BACKGROUND", nil, -8)
+		fill:SetPoint("TOPLEFT", 8, -8)
+		fill:SetPoint("BOTTOMRIGHT", -8, 8)
+		fill:SetColorTexture(0.1, 0.08, 0.06, 1)
+	end
 
 	local close = CreateFrame("Button", nil, popup, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", 2, 2)
 	close:SetScript("OnClick", function() popup:Hide() end)
+	Skin.CloseButton(close, popup)
 
-	local titleText = popup:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	local titleText = Skin.Text(popup, "ARTWORK", "GameFontNormalLarge")
 	titleText:SetPoint("TOP", 0, -18)
 	titleText:SetText(title)
+	Skin.Title(titleText, popup)
 
 	return popup
 end
@@ -1692,7 +1866,7 @@ local function showPresetHelpPopup()
 	if not presetHelpPopup then
 		local popup = createHelpPopupFrame("WRPresetHelpPopup", 340, 230, "Note Placeholders")
 
-		local intro = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		local intro = Skin.Text(popup, "ARTWORK", "GameFontHighlightSmall")
 		intro:SetPoint("TOPLEFT", 20, -46)
 		intro:SetPoint("RIGHT", -20, 0)
 		intro:SetJustifyH("LEFT")
@@ -1701,14 +1875,14 @@ local function showPresetHelpPopup()
 
 		local prevLine = intro
 		for _, placeholder in ipairs(ns.PRESET_PLACEHOLDERS) do
-			local line = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+			local line = Skin.Text(popup, "ARTWORK", "GameFontHighlightSmall")
 			line:SetPoint("TOPLEFT", prevLine, "BOTTOMLEFT", 0, -10)
 			line:SetJustifyH("LEFT")
-			line:SetText("|cffffd100" .. placeholder.label .. "|r  -  " .. placeholder.description)
+			line:SetText("|c" .. ns.ToHex(Skin.AccentColor()) .. placeholder.label .. "|r  -  " .. placeholder.description)
 			prevLine = line
 		end
 
-		local example = popup:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+		local example = Skin.Text(popup, "ARTWORK", "GameFontDisableSmall")
 		example:SetPoint("TOPLEFT", prevLine, "BOTTOMLEFT", 0, -16)
 		example:SetPoint("RIGHT", -20, 0)
 		example:SetJustifyH("LEFT")
@@ -1734,19 +1908,19 @@ local function showMacroHelpPopup()
 	if not macroHelpPopup then
 		local popup = createHelpPopupFrame("WRMacroHelpPopup", 340, 190, "Using Labels in a Macro")
 
-		local intro = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		local intro = Skin.Text(popup, "ARTWORK", "GameFontHighlightSmall")
 		intro:SetPoint("TOPLEFT", 20, -46)
 		intro:SetPoint("RIGHT", -20, 0)
 		intro:SetJustifyH("LEFT")
 		intro:SetText(MACRO_HELP_INTRO)
 		intro:SetWordWrap(true)
 
-		local command = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		local command = Skin.Text(popup, "ARTWORK", "GameFontHighlightSmall")
 		command:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -12)
 		command:SetJustifyH("LEFT")
-		command:SetText("|cffffd100/wrquick <label>|r")
+		command:SetText("|c" .. ns.ToHex(Skin.AccentColor()) .. "/wrquick <label>|r")
 
-		local note = popup:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+		local note = Skin.Text(popup, "ARTWORK", "GameFontDisableSmall")
 		note:SetPoint("TOPLEFT", command, "BOTTOMLEFT", 0, -16)
 		note:SetPoint("RIGHT", -20, 0)
 		note:SetJustifyH("LEFT")
@@ -1768,7 +1942,7 @@ showGlobalHotkeyHelpPopup = function()
 	if not globalHotkeyHelpPopup then
 		local popup = createHelpPopupFrame("WRGlobalHotkeyHelpPopup", 340, 230, "Global Hotkey")
 
-		local intro = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		local intro = Skin.Text(popup, "ARTWORK", "GameFontHighlightSmall")
 		intro:SetPoint("TOPLEFT", 20, -46)
 		intro:SetPoint("RIGHT", -20, 0)
 		intro:SetJustifyH("LEFT")
@@ -1832,7 +2006,7 @@ local function buildAutoTrackRow(box, def, option, rowY)
 	detailRow:SetPoint("TOPLEFT", 44, rowY - 24)
 	detailRow:SetSize(1, 1)
 
-	local gainLabel = detailRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local gainLabel = Skin.Text(detailRow, "ARTWORK", "GameFontNormalSmall")
 	gainLabel:SetPoint("TOPLEFT", 0, 0)
 	gainLabel:SetText("Rep gain")
 
@@ -1854,7 +2028,7 @@ local function buildAutoTrackRow(box, def, option, rowY)
 		self:ClearFocus()
 	end)
 
-	local noteLabel = detailRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local noteLabel = Skin.Text(detailRow, "ARTWORK", "GameFontNormalSmall")
 	noteLabel:SetPoint("LEFT", gainBox, "RIGHT", 16, 0)
 	noteLabel:SetText("Note")
 
@@ -1865,7 +2039,7 @@ local function buildAutoTrackRow(box, def, option, rowY)
 	bindTextBox(noteBox, option, "note")
 
 	if def.hasCooldown then
-		local cooldownLabel = detailRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		local cooldownLabel = Skin.Text(detailRow, "ARTWORK", "GameFontNormalSmall")
 		cooldownLabel:SetPoint("LEFT", noteBox, "RIGHT", 16, 0)
 		cooldownLabel:SetText("Cooldown")
 
@@ -1877,7 +2051,7 @@ local function buildAutoTrackRow(box, def, option, rowY)
 	end
 
 	if def.hasMinGrouped then
-		local minGroupedLabel = detailRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		local minGroupedLabel = Skin.Text(detailRow, "ARTWORK", "GameFontNormalSmall")
 		minGroupedLabel:SetPoint("TOPLEFT", 0, -20)
 		minGroupedLabel:SetText("Min. time grouped (minutes, 0 = off)")
 
@@ -1888,11 +2062,11 @@ local function buildAutoTrackRow(box, def, option, rowY)
 	end
 
 	if def.hasDuelResult then
-		local resultLabel = detailRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		local resultLabel = Skin.Text(detailRow, "ARTWORK", "GameFontNormalSmall")
 		resultLabel:SetPoint("TOPLEFT", 0, -20)
 		resultLabel:SetText("{{duelresult}}")
 
-		local victoryLabel = detailRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		local victoryLabel = Skin.Text(detailRow, "ARTWORK", "GameFontNormalSmall")
 		victoryLabel:SetPoint("LEFT", resultLabel, "RIGHT", 12, 0)
 		victoryLabel:SetText("Victory")
 		local victoryBox = ns.CreateSmallEditBox(detailRow, 110, 16)
@@ -1901,7 +2075,7 @@ local function buildAutoTrackRow(box, def, option, rowY)
 		bindTextBox(victoryBox, option, "victoryText")
 		setTooltip(victoryBox, "What {{duelresult}} becomes in the note when you win.")
 
-		local lossLabel = detailRow:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		local lossLabel = Skin.Text(detailRow, "ARTWORK", "GameFontNormalSmall")
 		lossLabel:SetPoint("LEFT", victoryBox, "RIGHT", 16, 0)
 		lossLabel:SetText("Loss")
 		local lossBox = ns.CreateSmallEditBox(detailRow, 110, 16)
@@ -1951,7 +2125,7 @@ local function buildAutoTrackGeneralBox(parent, y, onToggle)
 	end)
 end
 
-local EMOTE_RULE_DEF = { label = "", hasCooldown = true }
+local EMOTE_RULE_DEF = { label = "", hasCooldown = true, hint = "Turns this rule on or off. Its settings are kept while it's off." }
 -- extra space between a rule's Match line and its Rep gain/Note line
 local EMOTE_RULE_LINE_GAP = 5
 local EMOTE_RULE_HEIGHT = autoTrackRowHeight(EMOTE_RULE_DEF) + EMOTE_RULE_LINE_GAP
@@ -1982,7 +2156,7 @@ local function buildAutoTrackEmotesBox(parent, y, onToggle)
 		local check, detailRow = buildAutoTrackRow(box, EMOTE_RULE_DEF, rule, rowY)
 		detailRow:SetPoint("TOPLEFT", 44, rowY - 24 - EMOTE_RULE_LINE_GAP)
 
-		local matchLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		local matchLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 		matchLabel:SetPoint("LEFT", check, "RIGHT", 4, 0)
 		matchLabel:SetText("Match")
 
@@ -2001,6 +2175,7 @@ local function buildAutoTrackEmotesBox(parent, y, onToggle)
 		local deleteButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
 		deleteButton:SetSize(22, 18)
 		deleteButton:SetText("X")
+		Skin.CloseButton(deleteButton)
 		deleteButton:SetPoint("LEFT", detailRow.cooldownBox, "RIGHT", 12, 0)
 		setTooltip(deleteButton, "Remove this rule.")
 		deleteButton:SetScript("OnClick", function()
@@ -2012,6 +2187,7 @@ local function buildAutoTrackEmotesBox(parent, y, onToggle)
 	end
 
 	local addButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+	Skin.Button(addButton)
 	addButton:SetSize(100, 20)
 	addButton:SetText("+ Add Emote")
 	addButton:SetPoint("TOPLEFT", 8, rowY - 2)
@@ -2065,7 +2241,7 @@ local function buildDungeonTrackingBox(parent, y, onToggle)
 	autoLogDetail:SetPoint("TOPLEFT", 44, rowY - 24)
 	autoLogDetail:SetSize(1, 1)
 
-	local gainLabel = autoLogDetail:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local gainLabel = Skin.Text(autoLogDetail, "ARTWORK", "GameFontNormalSmall")
 	gainLabel:SetPoint("TOPLEFT", 0, 0)
 	gainLabel:SetText("Rep gain")
 	local gainBox = ns.CreateSmallEditBox(autoLogDetail, 34, 14)
@@ -2084,7 +2260,7 @@ local function buildDungeonTrackingBox(parent, y, onToggle)
 		self:ClearFocus()
 	end)
 
-	local noteLabel = autoLogDetail:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local noteLabel = Skin.Text(autoLogDetail, "ARTWORK", "GameFontNormalSmall")
 	noteLabel:SetPoint("LEFT", gainBox, "RIGHT", 16, 0)
 	noteLabel:SetText("Note")
 	local noteBox = ns.CreateSmallEditBox(autoLogDetail, 240, 16)
@@ -2123,7 +2299,7 @@ local function buildSurveySettingsBox(parent, y)
 	surveyDetail:SetPoint("TOPLEFT", 8, -22 - 26)
 	surveyDetail:SetSize(1, 1)
 
-	local prefixLabel = surveyDetail:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local prefixLabel = Skin.Text(surveyDetail, "ARTWORK", "GameFontNormalSmall")
 	prefixLabel:SetPoint("TOPLEFT", 0, 0)
 	prefixLabel:SetText("Note prefix")
 	local prefixBox = ns.CreateSmallEditBox(surveyDetail, 220, 16)
@@ -2154,15 +2330,15 @@ local function buildRolePresetsBox(parent, y, onChange)
 		"Shown in a dropdown next to each survey row's note box; picking one fills that row's note and rep delta (both still editable after).")
 
 	local rowY = -22
-	local labelHeader = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local labelHeader = Skin.Text(box, "ARTWORK", "GameFontDisableSmall")
 	labelHeader:SetPoint("TOPLEFT", 8, rowY)
 	labelHeader:SetText("Label")
 
-	local noteHeader = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local noteHeader = Skin.Text(box, "ARTWORK", "GameFontDisableSmall")
 	noteHeader:SetPoint("LEFT", labelHeader, "LEFT", 120, 0)
 	noteHeader:SetText("Note text")
 
-	local repHeader = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local repHeader = Skin.Text(box, "ARTWORK", "GameFontDisableSmall")
 	repHeader:SetPoint("LEFT", noteHeader, "LEFT", 248, 0)
 	repHeader:SetText("Rep")
 
@@ -2198,6 +2374,7 @@ local function buildRolePresetsBox(parent, y, onChange)
 		local deleteButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
 		deleteButton:SetSize(22, 18)
 		deleteButton:SetText("X")
+		Skin.CloseButton(deleteButton)
 		deleteButton:SetPoint("LEFT", deltaBox, "RIGHT", 8, 0)
 		deleteButton:SetScript("OnClick", function()
 			table.remove(rolePresets, i)
@@ -2208,6 +2385,7 @@ local function buildRolePresetsBox(parent, y, onChange)
 	end
 
 	local addPresetButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+	Skin.Button(addPresetButton)
 	addPresetButton:SetSize(100, 20)
 	addPresetButton:SetText("+ Add Preset")
 	addPresetButton:SetPoint("TOPLEFT", 8, rowY - 2)
@@ -2222,6 +2400,7 @@ end
 -- manual, so not under Auto-Track and not affected by its module switch
 local function buildSurveyPanel(parent)
 	local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+	Skin.ScrollBar(scroll)
 	ns.SetGentleScroll(scroll)
 	scroll:SetPoint("TOPLEFT", 0, 0)
 	scroll:SetPoint("BOTTOMRIGHT", -34, 0)
@@ -2302,7 +2481,7 @@ local function buildRecentAlliesBox(parent, y, onToggle)
 	local rowY = -COLLAPSED_HEIGHT
 
 	if not supported then
-		local warning = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		local warning = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 		warning:SetPoint("TOPLEFT", 8, rowY)
 		warning:SetPoint("RIGHT", -10, 0)
 		warning:SetJustifyH("LEFT")
@@ -2328,7 +2507,7 @@ local function buildRecentAlliesBox(parent, y, onToggle)
 	detail:SetPoint("TOPLEFT", 8, rowY - 29)
 	detail:SetSize(1, 1)
 
-	local gainLabel = detail:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local gainLabel = Skin.Text(detail, "ARTWORK", "GameFontNormalSmall")
 	gainLabel:SetPoint("TOPLEFT", 0, 0)
 	gainLabel:SetText("Rep gain")
 	local gainBox = ns.CreateSmallEditBox(detail, 34, 14)
@@ -2347,7 +2526,7 @@ local function buildRecentAlliesBox(parent, y, onToggle)
 		self:ClearFocus()
 	end)
 
-	local noteLabel = detail:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local noteLabel = Skin.Text(detail, "ARTWORK", "GameFontNormalSmall")
 	noteLabel:SetPoint("LEFT", gainBox, "RIGHT", 16, 0)
 	noteLabel:SetText("Note")
 	local noteBox = ns.CreateSmallEditBox(detail, 220, 16)
@@ -2367,7 +2546,7 @@ local function buildRecentAlliesBox(parent, y, onToggle)
 	setTooltip(noteBox,
 		"{{interaction}} becomes the game's own description of what happened (e.g. \"Fought Together\"). {{loc}} is where it happened. {{yourlvl}}/{{theirlvl}} work too.")
 
-	local typesLabel = detail:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local typesLabel = Skin.Text(detail, "ARTWORK", "GameFontNormalSmall")
 	typesLabel:SetPoint("TOPLEFT", 0, -26)
 	typesLabel:SetText("Log for")
 	local typesDropdown = ns.CreateMultiSelectDropdown(detail, RECENT_ALLY_TYPE_OPTIONS,
@@ -2376,7 +2555,7 @@ local function buildRecentAlliesBox(parent, y, onToggle)
 		recentAllyTypeSummary, 200)
 	typesDropdown:SetPoint("LEFT", typesLabel, "RIGHT", 8, 0)
 
-	local cooldownLabel = detail:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local cooldownLabel = Skin.Text(detail, "ARTWORK", "GameFontNormalSmall")
 	cooldownLabel:SetPoint("LEFT", typesDropdown, "RIGHT", 16, 0)
 	cooldownLabel:SetText("Cooldown")
 	local cooldownBox = ns.CreateSmallEditBox(detail, 30, 14, true)
@@ -2411,7 +2590,7 @@ local function buildNearbyAutoAddBox(parent, y)
 	local box = createSectionBox(parent, y, height, "Nearby Players")
 	local autoAdd = ns.GetSettings().autoAddNearby
 
-	local warning = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local warning = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	warning:SetPoint("TOPLEFT", 8, -24)
 	warning:SetPoint("RIGHT", -10, 0)
 	warning:SetJustifyH("LEFT")
@@ -2455,7 +2634,7 @@ local function buildSeenCountBox(parent, y)
 	local height = 78
 	local box = createSectionBox(parent, y, height, "Seen-Count Tracking")
 
-	local cooldownLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local cooldownLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	cooldownLabel:SetPoint("TOPLEFT", 8, -24)
 	cooldownLabel:SetText("Cooldown (minutes)")
 
@@ -2490,6 +2669,7 @@ local function buildAutoTrackPanel(parent)
 	local settings = ns.GetSettings().autoTrack
 
 	local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+	Skin.ScrollBar(scroll)
 
 	ns.SetGentleScroll(scroll)
 	scroll:SetPoint("TOPLEFT", 0, 0)
@@ -2521,13 +2701,14 @@ local function buildAutoTrackPanel(parent)
 
 	-- covers every note field on this panel, so it sits up here rather than in one box
 	local helpButton = CreateFrame("Button", nil, header, "UIPanelButtonTemplate")
+	Skin.Button(helpButton)
 	helpButton:SetSize(20, 20)
 	helpButton:SetText("?")
 	helpButton:SetPoint("TOPLEFT", enableCheck, "BOTTOMLEFT", 2, -4)
 	helpButton:SetScript("OnClick", showPresetHelpPopup)
 	ns.AttachHookTooltip(helpButton, presetHelpPlainText())
 
-	local helpLabel = header:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	local helpLabel = Skin.Text(header, "ARTWORK", "GameFontHighlightSmall")
 	helpLabel:SetPoint("LEFT", helpButton, "RIGHT", 6, 0)
 	helpLabel:SetText("Notes")
 
@@ -2619,7 +2800,7 @@ local function buildSoundPicker(parent, x, y, labelText, sound, builtinOptions, 
 	container:SetPoint("TOPLEFT", x, y)
 	container:SetSize(1, 1)
 
-	local label = container:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local label = Skin.Text(container, "ARTWORK", "GameFontNormalSmall")
 	label:SetPoint("TOPLEFT", 0, 0)
 	label:SetText(labelText)
 
@@ -2684,10 +2865,11 @@ local function buildSoundPicker(parent, x, y, labelText, sound, builtinOptions, 
 	dropdown:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 4, -6)
 
 	pathBox = CreateFrame("EditBox", nil, container, "InputBoxTemplate")
+	Skin.EditBox(pathBox)
 	ns.EnableDoubleClickSelectAll(pathBox)
 	pathBox:SetSize(190, 16)
 	pathBox:SetAutoFocus(false)
-	pathBox:SetFontObject(GameFontHighlightSmall)
+	Skin.SetFont(pathBox, GameFontHighlightSmall)
 	pathBox:SetPoint("TOPLEFT", dropdown, "BOTTOMLEFT", 0, -4)
 	-- only a genuine "Custom" entry (not one of the FileDataID presets above, which may
 	-- themselves be numbers) ever populates or shows this box, same check the dropdown
@@ -2720,6 +2902,7 @@ local function buildSoundPicker(parent, x, y, labelText, sound, builtinOptions, 
 	end)
 
 	local testButton = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
+	Skin.Button(testButton)
 	testButton:SetSize(44, 20)
 	testButton:SetText("Test")
 	testButton:SetPoint("LEFT", dropdown, "RIGHT", 6, 0)
@@ -2777,7 +2960,7 @@ local function buildNearbyAlertsBox(parent, y)
 
 	local ROW_Y = -140
 
-	local cooldownLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local cooldownLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	cooldownLabel:SetPoint("TOPLEFT", 8, ROW_Y)
 	cooldownLabel:SetText("Cooldown per player (min)")
 
@@ -2803,7 +2986,7 @@ local function buildNearbyAlertsBox(parent, y)
 		self:ClearFocus()
 	end)
 
-	local instanceLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local instanceLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	instanceLabel:SetPoint("TOPLEFT", 230, ROW_Y)
 	instanceLabel:SetText("Disable while in")
 
@@ -2875,6 +3058,7 @@ end
 -- own sound pickers, add up to more than the window's minimum height.
 local function buildNearbySoundControl(parent)
 	local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+	Skin.ScrollBar(scroll)
 	ns.SetGentleScroll(scroll)
 	scroll:SetPoint("TOPLEFT", 0, 0)
 	scroll:SetPoint("BOTTOMRIGHT", -34, 0)
@@ -2907,38 +3091,42 @@ local function buildPresetsPanel(parent)
 	local box = createSectionBox(parent, -8, PRESETS_BOX_HEIGHT, "Quick-Add Presets")
 
 	local addButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+	Skin.Button(addButton)
 	addButton:SetSize(100, 20)
 	addButton:SetText("+ Add Preset")
 	addButton:SetPoint("TOPLEFT", 8, -48)
 
 	local headerY = -8 - PRESETS_BOX_HEIGHT - 8
-	local headerLabel = parent:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local headerLabel = Skin.Text(parent, "ARTWORK", "GameFontDisableSmall")
 	headerLabel:SetPoint("TOPLEFT", 20, headerY)
 	headerLabel:SetText("Button label")
 
 	local macroHelpButton = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+	Skin.Button(macroHelpButton)
 	macroHelpButton:SetSize(16, 16)
 	macroHelpButton:SetText("?")
 	macroHelpButton:SetPoint("LEFT", headerLabel, "RIGHT", 4, 0)
 	macroHelpButton:SetScript("OnClick", showMacroHelpPopup)
 	ns.AttachHookTooltip(macroHelpButton, macroHelpPlainText())
 
-	local headerText = parent:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local headerText = Skin.Text(parent, "ARTWORK", "GameFontDisableSmall")
 	headerText:SetPoint("LEFT", headerLabel, "LEFT", 124, 0)
 	headerText:SetText("Note text")
 
 	local placeholderHelpButton = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+	Skin.Button(placeholderHelpButton)
 	placeholderHelpButton:SetSize(16, 16)
 	placeholderHelpButton:SetText("?")
 	placeholderHelpButton:SetPoint("LEFT", headerText, "RIGHT", 4, 0)
 	placeholderHelpButton:SetScript("OnClick", showPresetHelpPopup)
 	ns.AttachHookTooltip(placeholderHelpButton, presetHelpPlainText())
 
-	local headerDelta = parent:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local headerDelta = Skin.Text(parent, "ARTWORK", "GameFontDisableSmall")
 	headerDelta:SetPoint("LEFT", headerText, "LEFT", 256, 0)
 	headerDelta:SetText("Rep")
 
 	local scroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+	Skin.ScrollBar(scroll)
 
 	ns.SetGentleScroll(scroll)
 	scroll:SetPoint("TOPLEFT", 0, headerY - 16)
@@ -3021,6 +3209,7 @@ local function buildPresetsPanel(parent)
 			local deleteButton = CreateFrame("Button", nil, rowsFrame, "UIPanelButtonTemplate")
 			deleteButton:SetSize(22, 18)
 			deleteButton:SetText("X")
+			Skin.CloseButton(deleteButton)
 			deleteButton:SetPoint("LEFT", deltaBox, "RIGHT", 8, 0)
 			deleteButton:SetScript("OnClick", function()
 				table.remove(settings.items, i)
@@ -3140,7 +3329,7 @@ local function buildRadialMenuPanel(parent)
 	local height = 368
 	local box = createSectionBox(parent, -8, height, "Radial Menu")
 
-	local hint = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local hint = Skin.Text(box, "ARTWORK", "GameFontDisableSmall")
 	hint:SetPoint("TOPLEFT", 8, -22)
 	hint:SetPoint("RIGHT", -10, 0)
 	hint:SetJustifyH("LEFT")
@@ -3170,7 +3359,7 @@ local function buildRadialMenuPanel(parent)
 	body:SetPoint("BOTTOMRIGHT", 0, 0)
 	body:SetSize(1, 1)
 
-	local holdLabel = body:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local holdLabel = Skin.Text(body, "ARTWORK", "GameFontNormalSmall")
 	holdLabel:SetPoint("TOPLEFT", 8, 0)
 	holdLabel:SetText("Minimum hold time (ms)")
 
@@ -3192,7 +3381,7 @@ local function buildRadialMenuPanel(parent)
 		self:ClearFocus()
 	end)
 
-	local nameColorLabel = body:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local nameColorLabel = Skin.Text(body, "ARTWORK", "GameFontNormalSmall")
 	nameColorLabel:SetPoint("LEFT", holdBox, "RIGHT", 30, 0)
 	nameColorLabel:SetText("Character name color")
 	local nameColorDropdown = ns.CreateDropdown(body, {
@@ -3204,6 +3393,34 @@ local function buildRadialMenuPanel(parent)
 		130, 20)
 	nameColorDropdown:SetPoint("LEFT", nameColorLabel, "RIGHT", 6, 0)
 	ns.AttachHookTooltip(nameColorDropdown, "Color of the target's name shown above the radial: their standing's bracket color, or their class color.")
+
+	local styleLabel = Skin.Text(body, "ARTWORK", "GameFontNormalSmall")
+	styleLabel:SetPoint("LEFT", nameColorDropdown, "RIGHT", 30, 0)
+	styleLabel:SetText("Wheel style")
+	local styleDropdown = ns.CreateDropdown(body, {
+		{ value = "theme", text = "Match theme" },
+		{ value = "classic", text = "Classic" },
+		{ value = "ring", text = "Ring" },
+		{ value = "tiles", text = "Tiles" },
+		{ value = "list", text = "List" },
+	},
+		function(value) return (settings.wheelStyle or "theme") == value end,
+		function(value)
+			settings.wheelStyle = value
+			ns.RebuildRadialWheel()
+			if ns.RefreshRadialMenuBinding then
+				ns.RefreshRadialMenuBinding()
+			end
+		end,
+		120, 20)
+	styleDropdown:SetPoint("LEFT", styleLabel, "RIGHT", 6, 0)
+	ns.RegisterTourTarget("options.radial.style", { styleLabel, styleDropdown })
+	ns.AttachHookTooltip(styleDropdown, "How the radial menu looks.\n\n"
+		.. "Classic: Blizzard's ping wheel art.\n"
+		.. "Ring: a ring of segments, the full name of the one you point at in the middle.\n"
+		.. "Tiles: flat buttons around the center.\n"
+		.. "List: a list that opens below the cursor. Move down to a row and release.\n"
+		.. "Match theme: Ring with the Dark and EllesmereUI themes, Classic with Default.")
 
 	buildCheckbox(body, 8, -24, "Disable the radial wheel while in combat",
 		settings.disableInCombat,
@@ -3217,7 +3434,7 @@ local function buildRadialMenuPanel(parent)
 		settings.hoverEnabled,
 		function(checked) settings.hoverEnabled = checked end)
 
-	local ring1Label = body:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local ring1Label = Skin.Text(body, "ARTWORK", "GameFontNormalSmall")
 	ring1Label:SetPoint("TOPLEFT", 8, -122)
 
 	local ring2Label
@@ -3277,7 +3494,7 @@ local function buildRadialMenuPanel(parent)
 	secondBody:SetSize(1, 1)
 
 	-- on the checkbox's own line, but part of secondBody so it grays out with it
-	local splitLabel = secondBody:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local splitLabel = Skin.Text(secondBody, "ARTWORK", "GameFontNormalSmall")
 	splitLabel:SetPoint("LEFT", secondCheck.label, "RIGHT", 20, 0)
 	splitLabel:SetText("Multiple radial behavior:")
 
@@ -3295,7 +3512,7 @@ local function buildRadialMenuPanel(parent)
 	ns.AttachHookTooltip(splitDropdown,
 		"Positive/Negative: radial 1 only offers presets that add rep, radial 2 only ones that take it away.\n\nEverything: either radial can hold any preset.\n\nEach choice remembers its own preset selections, so switching back and forth doesn't lose either.")
 
-	local modLabel = secondBody:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local modLabel = Skin.Text(secondBody, "ARTWORK", "GameFontNormalSmall")
 	modLabel:SetPoint("TOPLEFT", 8, 0)
 	modLabel:SetText("Modifier for the second radial")
 
@@ -3314,7 +3531,7 @@ local function buildRadialMenuPanel(parent)
 		100, 20)
 	modDropdown:SetPoint("TOPLEFT", modLabel, "BOTTOMLEFT", 2, -4)
 
-	ring2Label = secondBody:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	ring2Label = Skin.Text(secondBody, "ARTWORK", "GameFontNormalSmall")
 	ring2Label:SetPoint("TOPLEFT", modDropdown, "BOTTOMLEFT", 0, -14)
 	updateRingLabels()
 
@@ -3367,7 +3584,7 @@ local function buildIgnoreRulesBox(parent, y)
 	end
 
 	for i, flag in ipairs(ns.IGNORE_FLAGS) do
-		local label = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		local label = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 		label:SetPoint("TOP", box, "TOPLEFT", columnCenter(i), gridTop)
 		label:SetText(flag.label)
 		setTooltip(label, flag.tip)
@@ -3375,7 +3592,7 @@ local function buildIgnoreRulesBox(parent, y)
 
 	for r, rule in ipairs(ns.IGNORE_RULES) do
 		local rowMid = rowsTop - (r - 0.5) * IGNORE_ROW_HEIGHT
-		local label = box:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		local label = Skin.Text(box, "ARTWORK", "GameFontHighlightSmall")
 		label:SetPoint("LEFT", box, "TOPLEFT", 14, rowMid)
 		label:SetText(rule.label)
 		setTooltip(label, IGNORE_RULE_TIPS[rule.key])
@@ -3387,7 +3604,7 @@ local function buildIgnoreRulesBox(parent, y)
 		end
 	end
 
-	local help = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local help = Skin.Text(box, "ARTWORK", "GameFontDisableSmall")
 	help:SetPoint("TOPLEFT", 14, helpTop)
 	help:SetPoint("RIGHT", -14, 0)
 	help:SetJustifyH("LEFT")
@@ -3402,6 +3619,7 @@ local function buildIgnoreListBox(parent, y)
 	box:SetPoint("BOTTOM", parent, "BOTTOM", 0, 8)
 
 	local addTarget = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+	Skin.Button(addTarget)
 	addTarget:SetSize(90, 20)
 	addTarget:SetPoint("TOPLEFT", 8, -22)
 	addTarget:SetText("Add Target")
@@ -3418,7 +3636,7 @@ local function buildIgnoreListBox(parent, y)
 		ns.AddToIgnoreList(identity.key, identity)
 	end)
 
-	local nameLabel = box:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local nameLabel = Skin.Text(box, "ARTWORK", "GameFontNormalSmall")
 	nameLabel:SetPoint("LEFT", addTarget, "RIGHT", 14, 0)
 	nameLabel:SetText("Add by name")
 
@@ -3428,6 +3646,7 @@ local function buildIgnoreListBox(parent, y)
 	setTooltip(nameBox, "Their full name, like Name Surname. Shortcut: just the first name works if only one saved player has it.")
 
 	local addButton = CreateFrame("Button", nil, box, "UIPanelButtonTemplate")
+	Skin.Button(addButton)
 	addButton:SetSize(50, 20)
 	addButton:SetPoint("LEFT", nameBox, "RIGHT", 6, 0)
 	addButton:SetText("Add")
@@ -3452,12 +3671,13 @@ local function buildIgnoreListBox(parent, y)
 	nameBox:SetScript("OnEnterPressed", addByName)
 	nameBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
-	local countLabel = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local countLabel = Skin.Text(box, "ARTWORK", "GameFontDisableSmall")
 	countLabel:SetPoint("TOPRIGHT", -12, -26)
 
 	local refresh
 	local search = ""
 	local searchBox = CreateFrame("EditBox", nil, box, "SearchBoxTemplate")
+	Skin.EditBox(searchBox)
 	searchBox:SetSize(160, 20)
 	searchBox:SetPoint("RIGHT", countLabel, "LEFT", -12, 0)
 	-- Players tab's Ignored cell lands here with that player searched
@@ -3538,7 +3758,7 @@ local function buildIgnoreListBox(parent, y)
 			row.cells.remove:SetTextColor(1, 0.45, 0.45)
 		end,
 		onRightClick = function(item, rowFrame)
-			MenuUtil.CreateContextMenu(rowFrame, function(_, rootDescription)
+			Skin.ContextMenu(rowFrame, function(_, rootDescription)
 				rootDescription:CreateTitle(ns.DisplayName(item.record or item.row, item.key))
 				if item.record then
 					rootDescription:CreateButton("View Details", function() ns.ShowPlayerDetails(item.key) end)
@@ -3552,7 +3772,7 @@ local function buildIgnoreListBox(parent, y)
 	ignoreTable.container:SetPoint("TOPLEFT", 8, -50)
 	ignoreTable.container:SetPoint("BOTTOMRIGHT", -8, 6)
 
-	local emptyText = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local emptyText = Skin.Text(box, "ARTWORK", "GameFontDisableSmall")
 	emptyText:SetPoint("TOP", ignoreTable.container, "TOP", 0, -40)
 
 	refresh = function()
@@ -3592,12 +3812,12 @@ local creditPopup
 local function showCreditPopup(credits)
 	if not creditPopup then
 		local popup = createHelpPopupFrame("WRCreditPopup", 340, 140, "Community Credit")
-		popup.body = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		popup.body = Skin.Text(popup, "ARTWORK", "GameFontHighlightSmall")
 		popup.body:SetPoint("TOPLEFT", 20, -46)
 		popup.body:SetPoint("RIGHT", -20, 0)
 		popup.body:SetJustifyH("LEFT")
 		popup.body:SetWordWrap(true)
-		popup.footer = popup:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+		popup.footer = Skin.Text(popup, "ARTWORK", "GameFontDisableSmall")
 		popup.footer:SetPoint("TOPLEFT", popup.body, "BOTTOMLEFT", 0, -14)
 		popup.footer:SetText("Thanks for helping make Worth Remembering better!")
 		creditPopup = popup
@@ -3656,6 +3876,7 @@ function ns.BuildOptionsPanel(parent)
 		end
 		for i, button in ipairs(buttons) do
 			button:SetEnabled(i ~= index)
+			Skin.SetTabSelected(button, i == index)
 		end
 	end
 
@@ -3664,6 +3885,7 @@ function ns.BuildOptionsPanel(parent)
 		local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
 		button:SetSize(100, 22)
 		button:SetText(def.label)
+		Skin.ButtonTab(button)
 		if prevButton then
 			button:SetPoint("LEFT", prevButton, "RIGHT", 6, 0)
 		else

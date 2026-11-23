@@ -272,10 +272,7 @@ function ns.FindNameplateUnit(name, realmOrSurname)
 end
 
 local frame = CreateFrame("Frame")
-frame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-frame:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
-frame:RegisterEvent("UPDATE_MOUSEOVER_UNIT")
-frame:SetScript("OnEvent", function(_, event, unit)
+ns.GateEvents(frame, { "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "UPDATE_MOUSEOVER_UNIT" }, function(_, event, unit)
 	if event == "UPDATE_MOUSEOVER_UNIT" then
 		if ns.GetSettings().autoAddNearby.requireMouseover and not UnitIsUnit("mouseover", "player") then
 			local identity = ns.IdentifyUnit("mouseover")
@@ -288,4 +285,26 @@ frame:SetScript("OnEvent", function(_, event, unit)
 	else
 		clearUnit(unit)
 	end
+end)
+
+-- disabled: icons and the Nearby list go; enabled again: the plates already up come back
+ns.OnSuppressionChanged(function(now, stateChanged)
+	if not stateChanged then
+		return
+	end
+	if now then
+		for unit in pairs(visibleUnits) do
+			clearPlateIcon(unit)
+		end
+		wipe(visibleUnits)
+		wipe(held)
+	else
+		for _, plate in ipairs(C_NamePlate.GetNamePlates() or {}) do
+			local unit = plate.namePlateUnitToken or (plate.UnitFrame and plate.UnitFrame.unit)
+			if unit then
+				updateUnit(unit)
+			end
+		end
+	end
+	refresh()
 end)

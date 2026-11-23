@@ -5,13 +5,21 @@ local ns = WorthRemembering
 -- updated. most recent entry first.
 ns.CHANGELOG = {
 	{
-		version = "1.2.1", date = "2026-11-15", shipped = false,
+		version = "1.3", date = "2026-11-22", shipped = false,
 		sections = {
 			{ heading = "Added", items = {
+				"Themes, in Options > General > Main: Default (the usual gold and parchment), Dark, and EllesmereUI, which matches your EllesmereUI look, font and accent color. Dark and EllesmereUI also turn checkboxes into toggles, restyle the dropdown menus and the color picker, and switch the radial menu to its Ring style. Changes after a reload.",
+				"A Font picker next to it: any of the game's fonts, or any font your other addons share (EllesmereUI's included). Works with every theme, Default too, and the radial menu follows it.",
+				"\"Wheel style\" in Options > Radial Menu: Classic (Blizzard's ping wheel art), Ring (a ring of segments with the full name of the one you're pointing at in the middle), Tiles (flat buttons around the center) or List (a list that opens below the cursor: move down to a row and release). Match theme, the default, uses Ring with Dark and EllesmereUI.",
+				"Disabling, in Options > General: \"Disable Worth Remembering entirely\", or \"Disable Worth Remembering while:\" in a dungeon, raid, battleground, arena, delve or scenario, or resting. While disabled nothing runs on its own (auto-adds, nameplate icons, tooltip lines, chat and Group Finder tags, right-click menu entries, the Quick Note hotkey, radial and macros, the Nearby window and alerts, popups). /wr and the minimap button still open the window, and /wr off and /wr on switch it quickly.",
 				"\"Hide it while nobody's listed\" in Options > General > Nearby Window: hides the Nearby window entirely while it's empty and brings it back when a notable player shows up. Off by default.",
 			}},
 			{ heading = "Changed", items = {
 				"The minimap button now shows its full name in minimap button collectors such as EllesmereUI's flyout. If you had ungrouped it in EllesmereUI, ungroup it again once, since EllesmereUI remembers ungrouped buttons by name.",
+			}},
+			{ heading = "Fixed", items = {
+				"A very long featured note on the Details tab ran past the edges of the window. It's now cut to fit, and hovering it shows the whole note.",
+				"Hovering the on/off toggle of a Directed Emotes rule (Options > Auto-Track) showed an empty tooltip box. It now says what the toggle does.",
 			}},
 		},
 	},

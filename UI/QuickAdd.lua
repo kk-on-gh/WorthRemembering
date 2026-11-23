@@ -1,4 +1,5 @@
 local ns = WorthRemembering
+local Skin = ns.Skin
 
 local popup
 local currentKey
@@ -105,6 +106,7 @@ function layoutPresets()
 		if not btn then
 			btn = CreateFrame("Button", nil, popup.presetsArea, "UIPanelButtonTemplate")
 			btn:SetHeight(20)
+			Skin.Button(btn)
 			presetButtonPool[i] = btn
 		end
 		btn:SetText(preset.label)
@@ -193,25 +195,29 @@ local function createPopup()
 	popup.relayout = relayout
 	-- border only, no bgFile, see Overview.lua's mainFrame backdrop. opacity comes
 	-- from the separate fill texture below.
-	popup:SetBackdrop({
-		edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
-		edgeSize = 24,
-		insets = { left = 8, right = 8, top = 8, bottom = 8 },
-	})
+	if not Skin.Window(popup) then
+		popup:SetBackdrop({
+			edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
+			edgeSize = 24,
+			insets = { left = 8, right = 8, top = 8, bottom = 8 },
+		})
 
-	local fill = popup:CreateTexture(nil, "BACKGROUND", nil, -8)
-	fill:SetPoint("TOPLEFT", 8, -8)
-	fill:SetPoint("BOTTOMRIGHT", -8, 8)
-	fill:SetColorTexture(0.1, 0.08, 0.06, 1)
+		local fill = popup:CreateTexture(nil, "BACKGROUND", nil, -8)
+		fill:SetPoint("TOPLEFT", 8, -8)
+		fill:SetPoint("BOTTOMRIGHT", -8, 8)
+		fill:SetColorTexture(0.1, 0.08, 0.06, 1)
+	end
 
 	local close = CreateFrame("Button", nil, popup, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", 2, 2)
 	close:SetScript("OnClick", function() popup:Hide() end)
+	Skin.CloseButton(close, popup)
 
-	popup.title = popup:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	popup.title = Skin.Text(popup, "ARTWORK", "GameFontNormalLarge")
 	popup.title:SetPoint("TOP", 0, -18)
+	Skin.Title(popup.title, popup)
 
-	popup.standing = popup:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	popup.standing = Skin.Text(popup, "ARTWORK", "GameFontNormal")
 	popup.standing:SetPoint("TOP", popup.title, "BOTTOM", 0, -6)
 
 	-- one-click preset buttons. layoutPresets resizes this (floored at PRESET_MIN_ROWS)
@@ -222,7 +228,7 @@ local function createPopup()
 
 	-- fixed absolute position, set for real by relayout() once the presets height is
 	-- known. not chained off the text above since it's all centered.
-	popup.noteLabel = popup:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	popup.noteLabel = Skin.Text(popup, "ARTWORK", "GameFontNormalSmall")
 	popup.noteLabel:SetPoint("TOPLEFT", popup, "TOPLEFT", 38, PRESETS_TOP_Y - PRESET_ROW_HEIGHT * 2 - AFTER_PRESETS_GAP)
 	popup.noteLabel:SetText("Note")
 	local noteLabel = popup.noteLabel
@@ -232,13 +238,15 @@ local function createPopup()
 	local noteBoxBorder = CreateFrame("Frame", nil, popup, "BackdropTemplate")
 	noteBoxBorder:SetSize(284, NOTE_BOX_HEIGHT)
 	noteBoxBorder:SetPoint("TOPLEFT", noteLabel, "BOTTOMLEFT", 2, -NOTE_LABEL_GAP)
-	noteBoxBorder:SetBackdrop({
-		bgFile = "Interface/Tooltips/UI-Tooltip-Background",
-		edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-		edgeSize = 10,
-		insets = { left = 3, right = 3, top = 3, bottom = 3 },
-	})
-	noteBoxBorder:SetBackdropColor(0, 0, 0, 0.6)
+	if not Skin.Panel(noteBoxBorder, "field") then
+		noteBoxBorder:SetBackdrop({
+			bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+			edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+			edgeSize = 10,
+			insets = { left = 3, right = 3, top = 3, bottom = 3 },
+		})
+		noteBoxBorder:SetBackdropColor(0, 0, 0, 0.6)
+	end
 
 	-- Wrapped in a scroll frame: a plain EditBox neither clips nor scrolls overflow on
 	-- its own, so a note longer than the box just bled out past its border with no way
@@ -246,6 +254,7 @@ local function createPopup()
 	local noteScroll = CreateFrame("ScrollFrame", nil, noteBoxBorder, "UIPanelScrollFrameTemplate")
 	noteScroll:SetPoint("TOPLEFT", 6, -6)
 	noteScroll:SetPoint("BOTTOMRIGHT", -26, 6)
+	Skin.ScrollBar(noteScroll)
 	-- The EditBox's own click-to-position-cursor hit test only seemed to register on
 	-- its first visible line; forwarding focus explicitly on any click in the visible
 	-- area is a reliable fallback regardless of where exactly that falls short.
@@ -257,7 +266,7 @@ local function createPopup()
 	popup.noteBox = CreateFrame("EditBox", nil, noteScroll)
 	ns.EnableDoubleClickSelectAll(popup.noteBox)
 	popup.noteBox:SetMultiLine(true)
-	popup.noteBox:SetFontObject(ChatFontNormal)
+	Skin.SetFont(popup.noteBox, ChatFontNormal)
 	popup.noteBox:SetAutoFocus(false)
 	popup.noteBox:SetWidth(noteScroll:GetWidth())
 	-- EditBox has no text-height query, so the scroll child gets a fixed height
@@ -300,13 +309,14 @@ local function createPopup()
 
 	popup.featuredCheck = CreateFrame("CheckButton", nil, popup, "UICheckButtonTemplate")
 	popup.featuredCheck:SetSize(20, 20)
+	Skin.Checkbox(popup.featuredCheck)
 	popup.featuredCheck:SetPoint("TOPLEFT", noteBoxBorder, "BOTTOMLEFT", 0, -FEATURED_ROW_GAP)
 
-	local featuredLabel = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	local featuredLabel = Skin.Text(popup, "ARTWORK", "GameFontHighlightSmall")
 	featuredLabel:SetPoint("LEFT", popup.featuredCheck, "RIGHT", 2, 0)
 	featuredLabel:SetText("Featured")
 
-	local repLabel = popup:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local repLabel = Skin.Text(popup, "ARTWORK", "GameFontNormalSmall")
 	repLabel:SetPoint("TOPLEFT", popup.featuredCheck, "BOTTOMLEFT", -2, -REP_LABEL_GAP)
 	repLabel:SetText("Standing +/-")
 
@@ -315,6 +325,7 @@ local function createPopup()
 	popup.repBox:SetSize(70, REP_BOX_HEIGHT)
 	popup.repBox:SetPoint("TOPLEFT", repLabel, "BOTTOMLEFT", 4, -REP_BOX_GAP)
 	popup.repBox:SetAutoFocus(false)
+	Skin.EditBox(popup.repBox)
 	popup.repBox:SetScript("OnEnterPressed", submitEntry)
 	popup.repBox:SetScript("OnEscapePressed", function(self)
 		self:ClearFocus()
@@ -346,8 +357,9 @@ local function createPopup()
 			button:SetPoint("LEFT", deltaRow, "LEFT", 0, 0)
 		end
 		button:SetScript("OnClick", function() nudgeDelta(amount) end)
+		Skin.Button(button)
 		-- Same red/green tint as the Players tab's inline +/- buttons.
-		local tint = button:CreateTexture(nil, "ARTWORK", nil, -1)
+		local tint = Skin.CreateArtHost(button):CreateTexture(nil, "ARTWORK", nil, -1)
 		tint:SetPoint("TOPLEFT", 3, -3)
 		tint:SetPoint("BOTTOMRIGHT", -3, 3)
 		if amount > 0 then
@@ -359,12 +371,14 @@ local function createPopup()
 	end
 
 	popup.addButton = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
+	Skin.Button(popup.addButton)
 	popup.addButton:SetSize(100, 24)
 	popup.addButton:SetPoint("BOTTOMLEFT", 20, 16)
 	popup.addButton:SetText("Add Entry")
 	popup.addButton:SetScript("OnClick", submitEntry)
 
 	popup.historyButton = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
+	Skin.Button(popup.historyButton)
 	popup.historyButton:SetSize(110, 24)
 	popup.historyButton:SetPoint("BOTTOMRIGHT", -20, 16)
 	popup.historyButton:SetText("History")
@@ -374,6 +388,7 @@ local function createPopup()
 	end)
 
 	popup.detailsButton = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
+	Skin.Button(popup.detailsButton)
 	popup.detailsButton:SetSize(90, 24)
 	popup.detailsButton:SetPoint("RIGHT", popup.historyButton, "LEFT", -6, 0)
 	popup.detailsButton:SetText("Details")
@@ -544,6 +559,10 @@ end
 -- quick-add for current target. macro/keybind entry point, see Bindings.xml and
 -- /wrnote in Slash.lua
 function ns.QuickNoteTarget()
+	if ns.IsSuppressed() then
+		ns.NotifySuppressed()
+		return
+	end
 	-- hovering a group listing in the LFG window takes over the same keybind entirely:
 	-- there's no real unit to quick-note there anyway (it's a UI panel, not a world
 	-- target/mouseover), so this can't collide with the normal target/mouseover/window

@@ -12,7 +12,7 @@ end
 
 -- name on its own line: wrapping breaks on "/" and would split "/u/name"
 function ns.CreditTextTwoLine(credit)
-	local line = credit.what .. " " .. credit.kind .. " by\n|cffffd100" .. credit.who .. "|r"
+	local line = credit.what .. " " .. credit.kind .. " by\n|c" .. ns.ToHex(ns.Skin.AccentColor()) .. credit.who .. "|r"
 	if credit.version then
 		line = line .. "  |cff888888(v" .. credit.version .. ")|r"
 	end

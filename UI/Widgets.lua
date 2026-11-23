@@ -1,26 +1,40 @@
 local ns = WorthRemembering
+local Skin = ns.Skin
 
 -- a single dropdown "selection" control: modern DropdownButton/SetupMenu when
 -- available, falling back to a plain cycle-button on clients without
 -- WowStyle1DropdownTemplate. an unknown template name makes CreateFrame throw
 -- immediately, so this is pcall'd rather than feature-detected up front.
 --
--- options = {{value=.., text=..}, ...}; isSelected(value) / onChange(value, text).
-function ns.CreateDropdown(parent, options, isSelected, onChange, width, height)
+-- options = {{value=.., text=..}, ...}, or a function rebuilt each time the menu opens;
+-- isSelected(value) / onChange(value, text). an option with .font shows in that font;
+-- scrollHeight caps a long menu.
+function ns.CreateDropdown(parent, options, isSelected, onChange, width, height, scrollHeight)
+	local function getOptions()
+		return type(options) == "function" and options() or options
+	end
 	local ok, dropdown = pcall(CreateFrame, "DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
 
 	if ok and dropdown and dropdown.SetupMenu then
 		dropdown:SetupMenu(function(_, rootDescription)
-			for _, option in ipairs(options) do
-				rootDescription:CreateRadio(option.text, function() return isSelected(option.value) end, function()
+			for _, option in ipairs(getOptions()) do
+				local radio = rootDescription:CreateRadio(option.text, function() return isSelected(option.value) end, function()
 					dropdown:SetText(option.text)
 					onChange(option.value, option.text)
 				end)
+				if option.font then
+					Skin.PreviewMenuFont(radio, option.font)
+				end
 			end
+			if scrollHeight then
+				rootDescription:SetScrollMode(scrollHeight)
+			end
+			Skin.StyleMenu(rootDescription)
 		end)
 	else
 		dropdown = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
 		dropdown:SetScript("OnClick", function(self)
+			local options = getOptions()
 			local currentIndex = 1
 			for i, option in ipairs(options) do
 				if isSelected(option.value) then
@@ -35,7 +49,7 @@ function ns.CreateDropdown(parent, options, isSelected, onChange, width, height)
 	end
 
 	function dropdown:Refresh()
-		for _, option in ipairs(options) do
+		for _, option in ipairs(getOptions()) do
 			if isSelected(option.value) then
 				self:SetText(option.text)
 				return
@@ -45,6 +59,7 @@ function ns.CreateDropdown(parent, options, isSelected, onChange, width, height)
 	dropdown:Refresh()
 
 	dropdown:SetSize(width or 150, height or 22)
+	Skin.Dropdown(dropdown)
 
 	return dropdown
 end
@@ -64,6 +79,9 @@ local BORDER_PIECES = {
 }
 
 local function applySmallBackdrop(frame)
+	if Skin.EditBox(frame) then
+		return
+	end
 	frame:SetBackdrop(SMALL_BACKDROP)
 	frame:SetBackdropColor(0.08, 0.06, 0.03, 0.9)
 	frame:SetBackdropBorderColor(1, 0.82, 0, 0.5)
@@ -83,6 +101,9 @@ end
 function ns.CreateCrispCheckbox(parent, size)
 	local btn = CreateFrame("CheckButton", nil, parent, "BackdropTemplate")
 	btn:SetSize(size, size)
+	if Skin.Tick(btn) then
+		return btn
+	end
 	applySmallBackdrop(btn)
 	local check = btn:CreateTexture(nil, "OVERLAY")
 	check:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
@@ -104,10 +125,12 @@ local function getSmallTooltip()
 	if not smallTooltip then
 		smallTooltip = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
 		smallTooltip:SetFrameStrata("TOOLTIP")
-		smallTooltip:SetBackdrop(SMALL_BACKDROP)
-		smallTooltip:SetBackdropColor(0.04, 0.03, 0.02, 0.98)
-		smallTooltip:SetBackdropBorderColor(1, 0.82, 0, 0.6)
-		smallTooltip.text = smallTooltip:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		if not Skin.Panel(smallTooltip, "float") then
+			smallTooltip:SetBackdrop(SMALL_BACKDROP)
+			smallTooltip:SetBackdropColor(0.04, 0.03, 0.02, 0.98)
+			smallTooltip:SetBackdropBorderColor(1, 0.82, 0, 0.6)
+		end
+		smallTooltip.text = Skin.Text(smallTooltip, "ARTWORK", "GameFontHighlightSmall")
 		smallTooltip.text:SetPoint("TOPLEFT", 6, -5)
 		smallTooltip.text:SetJustifyH("LEFT")
 		smallTooltip.text:SetJustifyV("TOP")
@@ -115,12 +138,28 @@ local function getSmallTooltip()
 	return smallTooltip
 end
 
+-- nil for empty text, which shows no tooltip at all
+local function tooltipText(text)
+	if type(text) == "function" then
+		text = text()
+	end
+	if text == nil or text == "" then
+		return nil
+	end
+	return text
+end
+
 -- Own small bordered popup instead of the shared global GameTooltip, so its opacity and
 -- width aren't shared/constrained by whatever else in the UI uses GameTooltip.
+-- text may be a function, read on every hover.
 function ns.AttachTooltip(frame, text)
 	frame:SetScript("OnEnter", function(self)
+		local value = tooltipText(text)
+		if not value then
+			return
+		end
 		local tip = getSmallTooltip()
-		tip.text:SetText(text)
+		tip.text:SetText(value)
 		local rawWidth = tip.text:GetStringWidth()
 		local width = math.min(SMALL_TOOLTIP_MAX_WIDTH, rawWidth)
 		tip.text:SetWidth(width)
@@ -139,8 +178,12 @@ end
 
 -- for tooltips whose text depends on what's under the mouse (e.g. a table cell)
 function ns.ShowSmallTooltip(owner, text)
+	local value = tooltipText(text)
+	if not value then
+		return
+	end
 	local tip = getSmallTooltip()
-	tip.text:SetText(text)
+	tip.text:SetText(value)
 	local width = math.min(SMALL_TOOLTIP_MAX_WIDTH, tip.text:GetStringWidth())
 	tip.text:SetWidth(width)
 	tip:SetWidth(width + 12)
@@ -161,8 +204,12 @@ end
 -- driving hover visuals, so attaching a tooltip doesn't clobber that behavior.
 function ns.AttachHookTooltip(frame, text)
 	frame:HookScript("OnEnter", function(self)
+		local value = tooltipText(text)
+		if not value then
+			return
+		end
 		local tip = getSmallTooltip()
-		tip.text:SetText(text)
+		tip.text:SetText(value)
 		local rawWidth = tip.text:GetStringWidth()
 		local width = math.min(SMALL_TOOLTIP_MAX_WIDTH, rawWidth)
 		tip.text:SetWidth(width)
@@ -194,6 +241,7 @@ function ns.CreateSmallCheckbox(parent, size, checked, onClick)
 	btn:SetScript("OnClick", function(self)
 		onClick(self:GetChecked() and true or false)
 	end)
+	Skin.Checkbox(btn)
 
 	return btn
 end
@@ -217,7 +265,7 @@ function ns.CreateSmallEditBox(parent, width, height, numeric)
 	box:SetSize(width, height or 16)
 	applySmallBackdrop(box)
 	box:SetAutoFocus(false)
-	box:SetFontObject(GameFontHighlightSmall)
+	Skin.SetFont(box, GameFontHighlightSmall)
 	box:SetJustifyH("CENTER")
 	box:SetTextInsets(2, 2, 0, 0)
 	if numeric then
@@ -261,11 +309,12 @@ function ns.CreateSmallSlider(parent, width, min, max, step, getValue, setValue)
 	track:SetPoint("LEFT", 0, 0)
 	track:SetPoint("RIGHT", 0, 0)
 	track:SetHeight(2)
-	track:SetColorTexture(1, 0.82, 0, 0.35)
-
 	local thumb = slider:CreateTexture(nil, "OVERLAY")
 	thumb:SetSize(8, 12)
-	thumb:SetColorTexture(1, 0.82, 0, 1)
+	if not Skin.Slider(slider, track, thumb) then
+		track:SetColorTexture(1, 0.82, 0, 0.35)
+		thumb:SetColorTexture(1, 0.82, 0, 1)
+	end
 	slider:SetThumbTexture(thumb)
 
 	slider:SetValue(getValue())
@@ -382,6 +431,7 @@ function ns.CreateMultiSelectDropdown(parent, options, isSelected, toggle, getSu
 					refreshDisplayText()
 				end)
 			end
+			Skin.StyleMenu(rootDescription)
 		end)
 	else
 		-- No good multi-select fallback shape for a plain button; degrades to
@@ -409,6 +459,7 @@ function ns.CreateMultiSelectDropdown(parent, options, isSelected, toggle, getSu
 	-- for callers whose selection changes from outside the menu
 	dropdown.RefreshText = refreshDisplayText
 	dropdown:SetSize(width or 180, 22)
+	Skin.Dropdown(dropdown)
 	return dropdown
 end
 
@@ -447,6 +498,7 @@ function ns.CreateFilterBar(parent, config)
 		searchBox:HookScript("OnTextChanged", function(self)
 			config.search.onChange(self:GetText():lower())
 		end)
+		Skin.EditBox(searchBox)
 		prevWidget = searchBox
 		bar.searchBox = searchBox
 	end
@@ -473,8 +525,9 @@ function ns.CreateFilterBar(parent, config)
 		check:SetScript("OnClick", function(self)
 			cc.onChange(self:GetChecked() and true or false)
 		end)
+		Skin.Checkbox(check)
 
-		local label = bar:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		local label = Skin.Text(bar, "ARTWORK", "GameFontHighlightSmall")
 		label:SetPoint("LEFT", check, "RIGHT", 2, 0)
 		label:SetText(cc.label)
 		check.label = label
@@ -521,6 +574,7 @@ function ns.CreateFilterBar(parent, config)
 		btn:SetPoint("RIGHT", -8, 0)
 		btn:SetText(config.actionButton.text)
 		btn:SetScript("OnClick", config.actionButton.onClick)
+		Skin.Button(btn)
 		bar.actionButton = btn
 	end
 
@@ -530,7 +584,7 @@ function ns.CreateFilterBar(parent, config)
 	-- multi-select mode (not a filter at all).
 	if config.rightCheckbox then
 		local rc = config.rightCheckbox
-		local label = bar:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		local label = Skin.Text(bar, "ARTWORK", "GameFontHighlightSmall")
 		label:SetPoint("RIGHT", -8, 0)
 		label:SetText(rc.label)
 		local check = CreateFrame("CheckButton", nil, bar, "UICheckButtonTemplate")
@@ -541,13 +595,14 @@ function ns.CreateFilterBar(parent, config)
 		check:SetScript("OnClick", function(self)
 			rc.onChange(self:GetChecked() and true or false)
 		end)
+		Skin.Checkbox(check)
 		if rc.tooltip then
 			ns.AttachHookTooltip(check, rc.tooltip)
 		end
 		bar.rightCheckbox = check
 	end
 
-	bar.countLabel = bar:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	bar.countLabel = Skin.Text(bar, "ARTWORK", "GameFontDisableSmall")
 	if bar.actionButton then
 		bar.countLabel:SetPoint("RIGHT", bar.actionButton, "LEFT", -10, 0)
 	elseif bar.rightCheckbox then
@@ -961,15 +1016,19 @@ function ns.CreateSortableTable(parent, config)
 	-- edge even with every individual label correctly clipped to its own column. this
 	-- catches that case too, clipping the whole row to the header's own bounds.
 	header:SetClipsChildren(true)
-	header:SetBackdrop({
-		edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-		edgeSize = 8,
-		insets = { left = 2, right = 2, top = 2, bottom = 2 },
-	})
-	header:SetBackdropBorderColor(1, 0.82, 0, 0.5)
+	if not Skin.IsActive() then
+		header:SetBackdrop({
+			edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+			edgeSize = 8,
+			insets = { left = 2, right = 2, top = 2, bottom = 2 },
+		})
+		header:SetBackdropBorderColor(1, 0.82, 0, 0.5)
+	end
 	local headerFill = header:CreateTexture(nil, "BACKGROUND")
 	headerFill:SetAllPoints()
-	headerFill:SetColorTexture(0.32, 0.22, 0.09, 1)
+	if not Skin.HeaderStrip(headerFill) then
+		headerFill:SetColorTexture(0.32, 0.22, 0.09, 1)
+	end
 
 	-- Pagination bar (only when config.pageSize is set) reserves its own strip at the
 	-- bottom of the container, so the scrollframe gets a shorter BOTTOMRIGHT anchor than
@@ -991,14 +1050,17 @@ function ns.CreateSortableTable(parent, config)
 		nextButton:SetSize(70, 20)
 		nextButton:SetText("Next >")
 		nextButton:SetPoint("RIGHT", -24, 0)
+		Skin.Button(prevButton)
+		Skin.Button(nextButton)
 
-		pageLabel = pageBar:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		pageLabel = Skin.Text(pageBar, "ARTWORK", "GameFontHighlightSmall")
 		pageLabel:SetPoint("CENTER", 0, 0)
 	end
 
 	local scroll = CreateFrame("ScrollFrame", nil, container, "UIPanelScrollFrameTemplate")
 
 	ns.SetGentleScroll(scroll)
+	Skin.ScrollBar(scroll)
 	scroll:SetPoint("TOPLEFT", 0, -24)
 	scroll:SetPoint("BOTTOMRIGHT", -scrollbarInset, pageSize and PAGE_BAR_HEIGHT or 0)
 	local scrollChild = CreateFrame("Frame", nil, scroll)
@@ -1018,7 +1080,7 @@ function ns.CreateSortableTable(parent, config)
 		-- guessed offset only if that field isn't exposed.
 		local scrollDivider = container:CreateTexture(nil, "ARTWORK")
 		scrollDivider:SetWidth(1)
-		scrollDivider:SetColorTexture(1, 0.82, 0, 0.3)
+		Skin.Line(scrollDivider, 0.3)
 		if scroll.ScrollBar then
 			scrollDivider:SetPoint("TOP", scroll.ScrollBar, "TOP", 0, 0)
 			scrollDivider:SetPoint("BOTTOM", scroll.ScrollBar, "BOTTOM", 0, 0)
@@ -1146,6 +1208,8 @@ function ns.CreateSortableTable(parent, config)
 			label:SetText(ns.ColumnLabel(col))
 			if active then
 				label:SetTextColor(1, 1, 1)
+			elseif Skin.IsActive() then
+				label:SetTextColor(0.7, 0.7, 0.7)
 			else
 				label:SetTextColor(1, 0.82, 0)
 			end
@@ -1153,7 +1217,7 @@ function ns.CreateSortableTable(parent, config)
 			local arrowIcon = headerArrows[col.key]
 			if arrowIcon then
 				arrowIcon:SetShown(active)
-				if active then
+				if active and not Skin.SortArrow(arrowIcon, sortDir == "desc") then
 					-- Two separate up/down textures, not one texture flipped by texcoord.
 					arrowIcon:SetTexture(sortDir == "desc" and "Interface/Buttons/Arrow-Down-Up" or "Interface/Buttons/Arrow-Up-Up")
 				end
@@ -1236,7 +1300,7 @@ function ns.CreateSortableTable(parent, config)
 					end)
 					cell.checkbox = check
 				else
-					cell = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+					cell = Skin.Text(row, "ARTWORK", "GameFontHighlightSmall")
 					cell:SetJustifyH("LEFT")
 					cell:SetJustifyV("MIDDLE")
 					-- word wrap ON but capped to one line, not wrap-off: wrap-off lets a
@@ -1383,10 +1447,10 @@ function ns.CreateSortableTable(parent, config)
 		divider:SetPoint("TOP", 0, 0)
 		divider:SetPoint("BOTTOM", 0, 0)
 		divider:SetWidth(1)
-		divider:SetColorTexture(1, 0.82, 0, 0.3)
+		Skin.Line(divider, 0.3)
 		local hoverHighlight = handle:CreateTexture(nil, "ARTWORK")
 		hoverHighlight:SetAllPoints()
-		hoverHighlight:SetColorTexture(1, 0.82, 0, 0.6)
+		Skin.Accent(hoverHighlight, 0.6)
 		hoverHighlight:Hide()
 		handle:SetScript("OnEnter", function() hoverHighlight:Show() end)
 		handle:SetScript("OnLeave", function() hoverHighlight:Hide() end)
@@ -1424,17 +1488,17 @@ function ns.CreateSortableTable(parent, config)
 	dragOverlay:EnableMouse(false)
 	local dragOverlayFill = dragOverlay:CreateTexture(nil, "OVERLAY")
 	dragOverlayFill:SetAllPoints()
-	dragOverlayFill:SetColorTexture(1, 0.82, 0, 0.14)
+	Skin.Accent(dragOverlayFill, 0.14)
 	local dragOverlayEdgeL = dragOverlay:CreateTexture(nil, "OVERLAY")
 	dragOverlayEdgeL:SetPoint("TOPLEFT")
 	dragOverlayEdgeL:SetPoint("BOTTOMLEFT")
 	dragOverlayEdgeL:SetWidth(1)
-	dragOverlayEdgeL:SetColorTexture(1, 0.82, 0, 0.8)
+	Skin.Accent(dragOverlayEdgeL, 0.8)
 	local dragOverlayEdgeR = dragOverlay:CreateTexture(nil, "OVERLAY")
 	dragOverlayEdgeR:SetPoint("TOPRIGHT")
 	dragOverlayEdgeR:SetPoint("BOTTOMRIGHT")
 	dragOverlayEdgeR:SetWidth(1)
-	dragOverlayEdgeR:SetColorTexture(1, 0.82, 0, 0.8)
+	Skin.Accent(dragOverlayEdgeR, 0.8)
 	dragOverlay:Hide()
 
 	local draggingCol
@@ -1531,7 +1595,7 @@ function ns.CreateSortableTable(parent, config)
 		labelClip:SetPoint("TOPLEFT")
 		labelClip:SetPoint("BOTTOMRIGHT", -12, 0)
 
-		local fs = labelClip:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		local fs = Skin.Text(labelClip, "ARTWORK", "GameFontNormalSmall")
 		fs:SetAllPoints()
 		fs:SetJustifyH("LEFT")
 		fs:SetWordWrap(true)

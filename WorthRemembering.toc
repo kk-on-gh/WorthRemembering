@@ -3,6 +3,7 @@
 ## Notes: Keep distinct, timestamped notes and a -100..+100 standing on players you meet.
 ## Author: Kyle
 ## Version: 1.2
+## OptionalDeps: EllesmereUI
 ## SavedVariables: WorthRememberingDB
 ## IconTexture: Interface\AddOns\WorthRemembering\Media\MinimapIcon.png
 ## X-Category: Miscellaneous
@@ -13,6 +14,7 @@ Core/Namespace.lua
 Core/Changelog.lua
 Core/Credits.lua
 Core/Database.lua
+Core/Suppress.lua
 Core/Identity.lua
 Core/Ignore.lua
 Core/ChatIndicator.lua
@@ -26,7 +28,9 @@ Core/Tooltip.lua
 Core/LFGBrowse.lua
 Core/Minimap.lua
 
+UI/Skin.lua
 UI/Widgets.lua
+UI/ColorPicker.lua
 UI/Overview.lua
 UI/QuickAdd.lua
 UI/RadialMenu.lua

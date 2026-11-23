@@ -148,7 +148,7 @@ local function processAlly(ally, settings)
 	local cooldownSeconds = (settings.cooldownMinutes or 0) * 60
 	for _, interaction in ipairs(fresh) do
 		local typeKey = typeKeyByEnum[interaction.type]
-		if typeKey and settings.types[typeKey] then
+		if typeKey and settings.types[typeKey] and not ns.IsAllyKindDisabled(typeKey) then
 			identity = identity or buildIdentity(character)
 			if identity.key then
 				local trackKey = typeKey .. ":" .. identity.key
@@ -227,16 +227,13 @@ end
 -- passive only: the client fetches new data when Blizzard's own panel asks for it, and
 -- TryRequestRecentAlliesData is blocked from addon code (confirmed live)
 local frame = CreateFrame("Frame")
-for _, event in ipairs({
+ns.GateEvents(frame, {
 	"PLAYER_ENTERING_WORLD", "RECENT_ALLIES_DATA_READY", "RECENT_ALLIES_CACHE_UPDATE",
 	"RECENT_ALLIES_SYSTEM_STATUS_UPDATED", "RECENT_ALLY_DATA_UPDATED",
-}) do
-	pcall(frame.RegisterEvent, frame, event)
-end
-frame:SetScript("OnEvent", function(_, event, arg1)
+}, function(_, event, arg1)
 	if event == "RECENT_ALLY_DATA_UPDATED" then
 		scanOne(arg1)
 	else
 		queueScanAll()
 	end
-end)
+end, true)

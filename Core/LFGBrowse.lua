@@ -23,6 +23,9 @@ end
 -- note text but a neutral standing, which would show a "[WR+0]"-ish tag here that isn't
 -- actually meaningful for an at-a-glance rating like this one.
 local function notableRecord(key)
+	if ns.IsSuppressed() then
+		return nil
+	end
 	local record = key and ns.GetPlayerRecord(key, false)
 	if not record then
 		return nil
@@ -91,7 +94,7 @@ end
 -- at the top level, not inside setup() below, so it's always safe to call even before
 -- the lazily-loaded LFG addon exists yet -- it just returns nil until then.
 function ns.GetHoveredLFGRoster()
-	if not ns.GetSettings().lfgIntegrationEnabled then
+	if not ns.GetSettings().lfgIntegrationEnabled or ns.IsSuppressed() then
 		return nil
 	end
 	-- IsVisible, not IsShown: closing the parent LFG panel doesn't always Hide() this

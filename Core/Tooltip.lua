@@ -32,7 +32,7 @@ TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tool
 	if tooltip ~= GameTooltip and tooltip ~= ItemRefTooltip then
 		return
 	end
-	if not ns.GetSettings().tooltipEnabled then
+	if not ns.GetSettings().tooltipEnabled or ns.IsSuppressed() then
 		return
 	end
 

@@ -1,4 +1,5 @@
 local ns = WorthRemembering
+local Skin = ns.Skin
 
 local panel
 local table_
@@ -101,7 +102,7 @@ local function refresh()
 	panel.nameButton:SetShown(record == nil)
 	if not record then
 		panel.name:SetText("Select a player")
-		panel.name:SetTextColor(1, 0.82, 0)
+		panel.name:SetTextColor(Skin.AccentColor())
 		panel.subline:SetText("")
 		panel.statsLine1:SetText("")
 		panel.featuredNote:SetText("")
@@ -128,7 +129,7 @@ local function refresh()
 	local class = ns.ClassDisplayName(record.classFile)
 	local faction = record.faction or "Unknown faction"
 	local classHex = ns.ToHex(cr, cg, cb)
-	local pipe = "|c" .. ns.ToHex(1, 0.82, 0) .. "\124\124|r"
+	local pipe = "|c" .. ns.ToHex(Skin.AccentColor()) .. "\124\124|r"
 	panel.subline:SetText("|c" .. classHex .. race .. "|r  |c" .. classHex .. class .. "|r  " .. pipe .. "  |c" .. ns.ToHex(fr, fg, fb) .. faction .. "|r")
 
 	if CLASS_ICON_TCOORDS[record.classFile] then
@@ -163,6 +164,7 @@ local function refresh()
 	-- another tab and back re-randomizes it, same as walking away and coming back.
 	local chosen = ns.PickFeaturedEntry(record)
 	panel.featuredNote:SetText(chosen and ("\"" .. chosen.text .. "\"") or "")
+	panel.featuredText = chosen and chosen.text
 
 	panel.statsLine2:SetText(entryCount .. entryWord .. "   \124\124   " .. noteCount .. noteWord
 		.. "   \124\124   seen " .. seenCount .. seenWord)
@@ -203,11 +205,11 @@ function ns.BuildDetailsPanel(parent)
 
 	-- extra top gap plus centered name/icons/stats, reads like a character sheet rather
 	-- than a table
-	panel.name = parent:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+	panel.name = Skin.Text(parent, "ARTWORK", "GameFontNormalHuge")
 	panel.name:SetPoint("TOP", parent, "TOP", 0, -26)
 	panel.name:SetFont(select(1, panel.name:GetFont()), 22, "OUTLINE")
 	panel.name:SetText("Select a player")
-	panel.name:SetTextColor(1, 0.82, 0)
+	panel.name:SetTextColor(Skin.AccentColor())
 
 	-- clickable only while showing the placeholder, see refresh()
 	panel.nameButton = CreateFrame("Button", nil, parent)
@@ -215,7 +217,7 @@ function ns.BuildDetailsPanel(parent)
 	panel.nameButton:SetScript("OnClick", function() ns.SelectPlayersTab() end)
 	local nameHighlight = panel.nameButton:CreateTexture(nil, "HIGHLIGHT")
 	nameHighlight:SetAllPoints()
-	nameHighlight:SetColorTexture(1, 0.82, 0, 0.15)
+	Skin.Accent(nameHighlight, 0.15)
 
 	-- flanks the name rather than inline below. Blizzard has class/faction icon atlases
 	-- but nothing for race, so race stays as colored text in the subline
@@ -230,15 +232,15 @@ function ns.BuildDetailsPanel(parent)
 	panel.factionIcon:SetSize(35, 35)
 	panel.factionIcon:SetPoint("LEFT", panel.name, "RIGHT", 6, -1)
 
-	panel.subline = parent:CreateFontString(nil, "ARTWORK", "GameFontHighlightLarge")
+	panel.subline = Skin.Text(parent, "ARTWORK", "GameFontHighlightLarge")
 	panel.subline:SetPoint("TOP", panel.name, "BOTTOM", 0, -6)
 
-	panel.statsLine1 = parent:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	panel.statsLine1 = Skin.Text(parent, "ARTWORK", "GameFontNormalLarge")
 	panel.statsLine1:SetPoint("TOP", panel.subline, "BOTTOM", 0, -10)
 
 	-- random featured note text, between standing and entries/notes/seen. fixed height
 	-- so layout doesn't shift when nothing's featured
-	panel.featuredNote = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	panel.featuredNote = Skin.Text(parent, "ARTWORK", "GameFontNormal")
 	-- this client errors on an unrecognized SetFont flag instead of ignoring it, which
 	-- silently aborted the rest of BuildDetailsPanel. pcall and fall back to upright text
 	if not pcall(panel.featuredNote.SetFont, panel.featuredNote, select(1, panel.featuredNote:GetFont()), 14, "ITALIC") then
@@ -247,9 +249,26 @@ function ns.BuildDetailsPanel(parent)
 	panel.featuredNote:SetTextColor(0.75, 0.75, 0.75)
 	panel.featuredNote:SetHeight(14)
 	panel.featuredNote:SetPoint("TOP", panel.statsLine1, "BOTTOM", 0, -8)
+	-- one line within the panel; a cut note shows in full on hover
+	panel.featuredNote:SetWordWrap(false)
+	local function fitFeaturedNote()
+		panel.featuredNote:SetWidth(math.max(100, parent:GetWidth() - 80))
+	end
+	fitFeaturedNote()
+	parent:HookScript("OnSizeChanged", fitFeaturedNote)
+	local featuredHover = CreateFrame("Frame", nil, parent)
+	featuredHover:SetAllPoints(panel.featuredNote)
+	featuredHover:EnableMouse(true)
+	featuredHover:SetScript("OnEnter", function(self)
+		local note = panel.featuredNote
+		if panel.featuredText and note.IsTruncated and note:IsTruncated() then
+			ns.ShowSmallTooltip(self, panel.featuredText)
+		end
+	end)
+	featuredHover:SetScript("OnLeave", ns.HideSmallTooltip)
 
 	-- Entries/notes/seen count: between the standing line's size and the last-seen line's.
-	panel.statsLine2 = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	panel.statsLine2 = Skin.Text(parent, "ARTWORK", "GameFontNormal")
 	panel.statsLine2:SetFont(select(1, panel.statsLine2:GetFont()), 14)
 	panel.statsLine2:SetPoint("TOP", panel.featuredNote, "BOTTOM", 0, -8)
 
@@ -260,13 +279,13 @@ function ns.BuildDetailsPanel(parent)
 	panel.statsLine3:SetPoint("TOP", panel.statsLine2, "BOTTOM", 0, -10)
 	panel.statsLine3:SetHeight(14)
 
-	panel.statsLine3Prefix = panel.statsLine3:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	panel.statsLine3Prefix = Skin.Text(panel.statsLine3, "ARTWORK", "GameFontNormal")
 	panel.statsLine3Prefix:SetPoint("LEFT", 0, 0)
 
-	panel.statsLine3Time = panel.statsLine3:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	panel.statsLine3Time = Skin.Text(panel.statsLine3, "ARTWORK", "GameFontNormal")
 	panel.statsLine3Time:SetPoint("LEFT", panel.statsLine3Prefix, "RIGHT", 0, 0)
 
-	panel.statsLine3Suffix = panel.statsLine3:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	panel.statsLine3Suffix = Skin.Text(panel.statsLine3, "ARTWORK", "GameFontNormal")
 	panel.statsLine3Suffix:SetPoint("LEFT", panel.statsLine3Time, "RIGHT", 0, 0)
 
 	-- Hovering just the relative-time piece reveals the exact timestamp as a tooltip,
@@ -276,16 +295,17 @@ function ns.BuildDetailsPanel(parent)
 	panel.statsLine3Hover:EnableMouse(true)
 
 	local divider = parent:CreateTexture(nil, "ARTWORK")
-	divider:SetColorTexture(1, 0.82, 0, 0.3)
+	Skin.Line(divider, 0.3)
 	divider:SetHeight(1)
 	divider:SetPoint("TOPLEFT", 12, -216)
 	divider:SetPoint("TOPRIGHT", -12, -216)
 
-	local historyLabel = parent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+	local historyLabel = Skin.Text(parent, "ARTWORK", "GameFontNormal")
 	historyLabel:SetPoint("TOPLEFT", divider, "BOTTOMLEFT", 2, -8)
 	historyLabel:SetText("Full history for this player")
 
 	panel.deleteButton = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+	Skin.Button(panel.deleteButton)
 	panel.deleteButton:SetSize(100, 22)
 	panel.deleteButton:SetPoint("RIGHT", divider, "RIGHT", 0, 0)
 	panel.deleteButton:SetPoint("TOP", historyLabel, "TOP", 0, 6)
@@ -301,6 +321,7 @@ function ns.BuildDetailsPanel(parent)
 	end)
 
 	panel.newEntryButton = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+	Skin.Button(panel.newEntryButton)
 	panel.newEntryButton:SetSize(100, 22)
 	panel.newEntryButton:SetPoint("RIGHT", panel.deleteButton, "LEFT", -8, 0)
 	panel.newEntryButton:SetPoint("TOP", historyLabel, "TOP", 0, 6)
@@ -319,7 +340,7 @@ function ns.BuildDetailsPanel(parent)
 		sortValue = sortValue,
 		render = render,
 		onRightClick = function(item, rowFrame)
-			MenuUtil.CreateContextMenu(rowFrame, function(_, rootDescription)
+			Skin.ContextMenu(rowFrame, function(_, rootDescription)
 				rootDescription:CreateTitle(ns.FormatTime(item.entry.time))
 				rootDescription:CreateButton("Edit Entry", function() ns.ShowEditEntry(detailsKey, ns.GetPlayerRecord(detailsKey, false), item.entry) end)
 				rootDescription:CreateButton("Delete Entry", function() ns.ConfirmDeleteEntry(detailsKey, item.entry) end)

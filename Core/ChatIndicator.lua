@@ -17,7 +17,7 @@ end
 
 -- Sender name filter only touches the displayed name; the player: hyperlink keeps the real name.
 local function senderNameFilter(event, decoratedName, text, playerName)
-	if not ns.GetSettings().chatIndicator.enabled then
+	if not ns.GetSettings().chatIndicator.enabled or ns.IsSuppressed() then
 		return nil
 	end
 	local key = resolveKey(playerName)

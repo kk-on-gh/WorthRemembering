@@ -1,4 +1,5 @@
 local ns = WorthRemembering
+local Skin = ns.Skin
 
 local popup
 local currentKey, currentEntry
@@ -74,44 +75,50 @@ local function createPopup()
 	ns.RestorePopupPosition(popup, "editEntry")
 	ns.MakePopupDraggable(popup, "editEntry")
 	popup:SetScript("OnMouseDown", function() popup:Raise() end)
-	popup:SetBackdrop({
-		edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
-		edgeSize = 24,
-		insets = { left = 8, right = 8, top = 8, bottom = 8 },
-	})
+	if not Skin.Window(popup) then
+		popup:SetBackdrop({
+			edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
+			edgeSize = 24,
+			insets = { left = 8, right = 8, top = 8, bottom = 8 },
+		})
 
-	local fill = popup:CreateTexture(nil, "BACKGROUND", nil, -8)
-	fill:SetPoint("TOPLEFT", 8, -8)
-	fill:SetPoint("BOTTOMRIGHT", -8, 8)
-	fill:SetColorTexture(0.1, 0.08, 0.06, 1)
+		local fill = popup:CreateTexture(nil, "BACKGROUND", nil, -8)
+		fill:SetPoint("TOPLEFT", 8, -8)
+		fill:SetPoint("BOTTOMRIGHT", -8, 8)
+		fill:SetColorTexture(0.1, 0.08, 0.06, 1)
+	end
 
 	local close = CreateFrame("Button", nil, popup, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", 2, 2)
 	close:SetScript("OnClick", function() popup:Hide() end)
+	Skin.CloseButton(close, popup)
 
-	popup.title = popup:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	popup.title = Skin.Text(popup, "ARTWORK", "GameFontNormalLarge")
 	popup.title:SetPoint("TOP", 0, -18)
 	popup.title:SetText("Edit Entry")
+	Skin.Title(popup.title, popup)
 
-	popup.meta = popup:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	popup.meta = Skin.Text(popup, "ARTWORK", "GameFontDisableSmall")
 	popup.meta:SetPoint("TOP", popup.title, "BOTTOM", 0, -8)
 
 	-- fixed position, not anchored off popup.meta: meta is center-anchored text whose
 	-- width varies with the name/timestamp shown, floated off-window for longer names
-	local noteLabel = popup:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local noteLabel = Skin.Text(popup, "ARTWORK", "GameFontNormalSmall")
 	noteLabel:SetPoint("TOPLEFT", popup, "TOPLEFT", 38, -76)
 	noteLabel:SetText("Note")
 
 	local noteBoxBorder = CreateFrame("Frame", nil, popup, "BackdropTemplate")
 	noteBoxBorder:SetSize(284, 128)
 	noteBoxBorder:SetPoint("TOPLEFT", noteLabel, "BOTTOMLEFT", 2, -4)
-	noteBoxBorder:SetBackdrop({
-		bgFile = "Interface/Tooltips/UI-Tooltip-Background",
-		edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
-		edgeSize = 10,
-		insets = { left = 3, right = 3, top = 3, bottom = 3 },
-	})
-	noteBoxBorder:SetBackdropColor(0, 0, 0, 0.6)
+	if not Skin.Panel(noteBoxBorder, "field") then
+		noteBoxBorder:SetBackdrop({
+			bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+			edgeFile = "Interface/Tooltips/UI-Tooltip-Border",
+			edgeSize = 10,
+			insets = { left = 3, right = 3, top = 3, bottom = 3 },
+		})
+		noteBoxBorder:SetBackdropColor(0, 0, 0, 0.6)
+	end
 
 	-- Wrapped in a scroll frame: a plain EditBox neither clips nor scrolls overflow on
 	-- its own, so a note longer than the box just bled out past its border with no way
@@ -119,6 +126,7 @@ local function createPopup()
 	local noteScroll = CreateFrame("ScrollFrame", nil, noteBoxBorder, "UIPanelScrollFrameTemplate")
 	noteScroll:SetPoint("TOPLEFT", 6, -6)
 	noteScroll:SetPoint("BOTTOMRIGHT", -26, 6)
+	Skin.ScrollBar(noteScroll)
 	-- The EditBox's own click-to-position-cursor hit test only seemed to register on
 	-- its first visible line; forwarding focus explicitly on any click in the visible
 	-- area is a reliable fallback regardless of where exactly that falls short.
@@ -130,7 +138,7 @@ local function createPopup()
 	popup.noteBox = CreateFrame("EditBox", nil, noteScroll)
 	ns.EnableDoubleClickSelectAll(popup.noteBox)
 	popup.noteBox:SetMultiLine(true)
-	popup.noteBox:SetFontObject(ChatFontNormal)
+	Skin.SetFont(popup.noteBox, ChatFontNormal)
 	popup.noteBox:SetAutoFocus(false)
 	popup.noteBox:SetWidth(noteScroll:GetWidth())
 	-- EditBox has no text-height query, so instead of measuring content the scroll
@@ -161,13 +169,14 @@ local function createPopup()
 
 	popup.featuredCheck = CreateFrame("CheckButton", nil, popup, "UICheckButtonTemplate")
 	popup.featuredCheck:SetSize(20, 20)
+	Skin.Checkbox(popup.featuredCheck)
 	popup.featuredCheck:SetPoint("TOPLEFT", noteBoxBorder, "BOTTOMLEFT", 0, -8)
 
-	local featuredLabel = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	local featuredLabel = Skin.Text(popup, "ARTWORK", "GameFontHighlightSmall")
 	featuredLabel:SetPoint("LEFT", popup.featuredCheck, "RIGHT", 2, 0)
 	featuredLabel:SetText("Featured")
 
-	local repLabel = popup:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local repLabel = Skin.Text(popup, "ARTWORK", "GameFontNormalSmall")
 	repLabel:SetPoint("TOPLEFT", popup.featuredCheck, "BOTTOMLEFT", -2, -8)
 	repLabel:SetText("Standing +/-")
 
@@ -176,6 +185,7 @@ local function createPopup()
 	popup.repBox:SetSize(70, 20)
 	popup.repBox:SetPoint("TOPLEFT", repLabel, "BOTTOMLEFT", 4, -6)
 	popup.repBox:SetAutoFocus(false)
+	Skin.EditBox(popup.repBox)
 	popup.repBox:SetScript("OnEnterPressed", save)
 	popup.repBox:SetScript("OnEscapePressed", function(self)
 		self:ClearFocus()
@@ -207,8 +217,9 @@ local function createPopup()
 			button:SetPoint("LEFT", deltaRow, "LEFT", 0, 0)
 		end
 		button:SetScript("OnClick", function() nudgeDelta(amount) end)
+		Skin.Button(button)
 		-- same red/green tint as the Players tab's inline +/- buttons
-		local tint = button:CreateTexture(nil, "ARTWORK", nil, -1)
+		local tint = Skin.CreateArtHost(button):CreateTexture(nil, "ARTWORK", nil, -1)
 		tint:SetPoint("TOPLEFT", 3, -3)
 		tint:SetPoint("BOTTOMRIGHT", -3, 3)
 		if amount > 0 then
@@ -220,12 +231,14 @@ local function createPopup()
 	end
 
 	popup.saveButton = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
+	Skin.Button(popup.saveButton)
 	popup.saveButton:SetSize(90, 24)
 	popup.saveButton:SetPoint("BOTTOMLEFT", 20, 16)
 	popup.saveButton:SetText("Save")
 	popup.saveButton:SetScript("OnClick", save)
 
 	popup.deleteButton = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
+	Skin.Button(popup.deleteButton)
 	popup.deleteButton:SetSize(130, 24)
 	popup.deleteButton:SetPoint("BOTTOMRIGHT", -20, 16)
 	popup.deleteButton:SetText("Delete This Entry")

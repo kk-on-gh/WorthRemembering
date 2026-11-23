@@ -1,4 +1,5 @@
 local ns = WorthRemembering
+local Skin = ns.Skin
 
 StaticPopupDialogs["WR_CONFIRM_DELETE_SELECTED_ENTRIES"] = {
 	text = "Delete %d selected entries? This cannot be undone.",
@@ -694,6 +695,7 @@ function ns.BuildHistoryPanel(parent)
 		},
 	})
 	local clearFiltersButton = CreateFrame("Button", nil, classRaceBar, "UIPanelButtonTemplate")
+	Skin.Button(clearFiltersButton)
 	clearFiltersButton:SetSize(100, 20)
 	clearFiltersButton:SetText("Clear Filters")
 	clearFiltersButton:SetPoint("RIGHT", -8, 0)
@@ -713,7 +715,7 @@ function ns.BuildHistoryPanel(parent)
 		sortValue = sortValue,
 		render = render,
 		onRightClick = function(item, rowFrame)
-			MenuUtil.CreateContextMenu(rowFrame, function(_, rootDescription)
+			Skin.ContextMenu(rowFrame, function(_, rootDescription)
 				rootDescription:CreateTitle(ns.DisplayName(item.record, item.key) .. "  |  " .. ns.FormatTime(item.entry.time))
 				rootDescription:CreateButton("Edit Entry", function() ns.ShowEditEntry(item.key, item.record, item.entry) end)
 				rootDescription:CreateButton("Delete Entry", function() ns.ConfirmDeleteEntry(item.key, item.entry) end)

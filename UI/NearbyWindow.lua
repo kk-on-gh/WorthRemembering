@@ -1,4 +1,5 @@
 local ns = WorthRemembering
+local Skin = ns.Skin
 
 local frame
 local scroll
@@ -193,7 +194,7 @@ local function ensureTargetButton()
 
 	local highlight = targetButton:CreateTexture(nil, "HIGHLIGHT")
 	highlight:SetAllPoints()
-	highlight:SetColorTexture(1, 0.82, 0, 0.15)
+	Skin.Accent(highlight, 0.15)
 
 	-- macrotext follows whoever the hovered row shows right now, rows get reused
 	targetButton:SetScript("PreClick", function(self, button)
@@ -275,19 +276,19 @@ local function acquireRow(index)
 	row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 	row:HookScript("OnEnter", showTargetButton)
 
-	row.name = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	row.name = Skin.Text(row, "ARTWORK", "GameFontHighlightSmall")
 	row.name:SetPoint("LEFT", 4, 0)
 	row.name:SetJustifyH("LEFT")
 	row.name:SetWidth(rowAreaWidth() - 44)
 	row.name:SetWordWrap(false)
 
-	row.standing = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	row.standing = Skin.Text(row, "ARTWORK", "GameFontHighlightSmall")
 	row.standing:SetPoint("RIGHT", -4, 0)
 	row.standing:SetJustifyH("RIGHT")
 
 	local highlight = row:CreateTexture(nil, "HIGHLIGHT")
 	highlight:SetAllPoints()
-	highlight:SetColorTexture(1, 0.82, 0, 0.15)
+	Skin.Accent(highlight, 0.15)
 
 	row:SetPoint("TOPLEFT", 0, -(index - 1) * ROW_HEIGHT)
 
@@ -408,6 +409,9 @@ local function refresh()
 	if ns.GetSettings().nearbyHideWhenEmpty and ns.GetSettings().nearbyWindowEnabled and not forceShown then
 		frame:SetShown(#players > 0)
 	end
+	if ns.IsSuppressed() and not forceShown then
+		frame:Hide()
+	end
 
 	local currentKeys = {}
 	for _, entry in ipairs(players) do
@@ -438,7 +442,7 @@ local function refresh()
 
 		row:SetScript("OnClick", function(_, button)
 			if button == "RightButton" then
-				MenuUtil.CreateContextMenu(row, function(_, rootDescription)
+				Skin.ContextMenu(row, function(_, rootDescription)
 					rootDescription:CreateTitle(name)
 					rootDescription:CreateButton("View Details", function() ns.ShowPlayerDetails(key) end)
 					rootDescription:CreateButton("Add Entry", function() ns.ShowQuickAdd(key) end)
@@ -575,7 +579,7 @@ local function createFrame()
 			layoutRowArea(#ns.GetNearbyNotablePlayers())
 		end
 	end)
-	ns.ApplyPanelBackdrop(frame, 1)
+	ns.ApplyPanelBackdrop(frame, 1, "float")
 
 	frame:SetScript("OnEnter", applyHoverAlpha)
 	frame:SetScript("OnLeave", applyIdleAlpha)
@@ -585,9 +589,11 @@ local function createFrame()
 	frame.resizeGrip = CreateFrame("Button", nil, frame)
 	frame.resizeGrip:SetSize(16, 16)
 	frame.resizeGrip:SetPoint("BOTTOMRIGHT", -2, 2)
-	local gripTex = frame.resizeGrip:CreateTexture(nil, "OVERLAY")
-	gripTex:SetAllPoints()
-	gripTex:SetTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+	if not Skin.ResizeGrip(frame.resizeGrip) then
+		local gripTex = frame.resizeGrip:CreateTexture(nil, "OVERLAY")
+		gripTex:SetAllPoints()
+		gripTex:SetTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+	end
 	-- hand-rolled instead of StartSizing, whose cursor-delta math breaks under this
 	-- frame's configurable SetScale, turning a small drag into an instant huge resize
 	local resizing = false
@@ -637,22 +643,23 @@ local function createFrame()
 	end)
 	frame.resizeGrip:SetShown(settings.nearbyStaticSize)
 
-	frame.title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	frame.title = Skin.Text(frame, "ARTWORK", "GameFontNormalSmall")
 	frame.title:SetText("WR - Nearby")
 	frame.title:SetWordWrap(false)
 
 	frame.closeButton = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
 	frame.closeButton:SetSize(16, 16)
+	Skin.CloseButton(frame.closeButton)
 	frame.closeButton:SetScript("OnClick", function()
 		ns.GetSettings().nearbyWindowEnabled = false
 		frame:Hide()
 	end)
 
-	frame.divider = frame:CreateTexture(nil, "ARTWORK")
-	frame.divider:SetColorTexture(1, 0.82, 0, 0.3)
+	frame.divider = Skin.CreateArtHost(frame):CreateTexture(nil, "ARTWORK")
+	Skin.Line(frame.divider, 0.3)
 	frame.divider:SetHeight(1)
 
-	frame.emptyText = frame:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	frame.emptyText = Skin.Text(frame, "ARTWORK", "GameFontDisableSmall")
 	frame.emptyText:SetText("No notable players nearby")
 
 	-- full-window overlay, hidden until triggerFlash pulses it. needs its own raised
@@ -687,6 +694,7 @@ local function createFrame()
 	scroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
 
 	ns.SetGentleScroll(scroll)
+	Skin.ScrollBar(scroll)
 	-- the template re-shows its scrollbar whenever the scroll range changes, which would
 	-- undo layoutRowArea hiding it
 	if scroll.ScrollBar then
@@ -703,7 +711,7 @@ local function createFrame()
 	applyGrowDirectionLayout()
 	restorePosition()
 	applyIdleAlpha()
-	frame:SetShown(settings.nearbyWindowEnabled and not settings.nearbyHideWhenEmpty)
+	frame:SetShown(settings.nearbyWindowEnabled and not settings.nearbyHideWhenEmpty and not ns.IsSuppressed())
 end
 
 -- shown at login if enabled, not lazily on first window open. unlike the tab panels,
@@ -755,3 +763,12 @@ function ns.SetNearbyForceShown(on)
 		refresh()
 	end
 end
+
+ns.OnSuppressionChanged(function(now, stateChanged)
+	if not (frame and stateChanged) then
+		return
+	end
+	local settings = ns.GetSettings()
+	frame:SetShown(not now and settings.nearbyWindowEnabled and not settings.nearbyHideWhenEmpty)
+	refresh()
+end)

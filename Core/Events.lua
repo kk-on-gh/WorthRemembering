@@ -1,5 +1,57 @@
 local ns = WorthRemembering
 
+-- auto-prune, patch notes and tour offers: at login, or once enabled again if disabled then
+local function runLoginExtras()
+	-- Each pcall'd separately so an error in one (e.g. an unexpected client
+	-- difference) can't silently stop the others from ever running.
+	local ok, prunedCount = pcall(ns.RunAutoPrune)
+	if not ok then
+		ns.Print("Auto-prune failed: " .. tostring(prunedCount))
+	elseif prunedCount > 0 then
+		ns.Print("Auto-pruned " .. prunedCount .. " player record(s).")
+	end
+
+	-- recorded even when the option is off, so turning it back on only affects
+	-- future versions
+	local version = ns.GetAddonVersion()
+	local lastSeen = ns.GetLastSeenVersion()
+	if version and version ~= lastSeen then
+		-- nil on a fresh install, so the About tab only expands what's actually new
+		ns.UpdatedFromVersion = lastSeen
+		ns.SetLastSeenVersion(version)
+		if lastSeen == nil and #ns.GetAllPlayerKeys() == 0 then
+			ns.EnsureDemoPlayer()
+			ns.MarkTourOffered()
+			C_Timer.After(2, function()
+				StaticPopup_Show("WR_TOUR_OFFER")
+			end)
+		elseif ns.GetSettings().showPatchNotesOnUpdate then
+			C_Timer.After(1, function()
+				local shown, showErr = pcall(ns.SelectAboutTab)
+				if not shown then
+					ns.Print("Patch notes failed to open: " .. tostring(showErr))
+				end
+			end)
+		end
+	end
+
+	-- existing users never saw the new-install offer: once, on top of the patch notes
+	if not ns.WasTourOffered() then
+		ns.MarkTourOffered()
+		C_Timer.After(2, function()
+			StaticPopup_Show("WR_TOUR_OFFER_EXISTING")
+		end)
+	end
+end
+
+local loginExtrasPending = false
+ns.OnSuppressionChanged(function(now)
+	if not now and loginExtrasPending then
+		loginExtrasPending = false
+		runLoginExtras()
+	end
+end)
+
 local frame = CreateFrame("Frame", "WREventFrame")
 frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
@@ -7,23 +59,20 @@ frame:RegisterEvent("PLAYER_LOGIN")
 frame:SetScript("OnEvent", function(_, event, loadedAddon)
 	if event == "ADDON_LOADED" and loadedAddon == ns.name then
 		ns.InitDatabase()
+		ns.Skin.Request(ns.GetSettings().theme, ns.GetSettings().font)
+		ns.StartSuppression()
 		return
 	end
 
 	if event == "PLAYER_LOGIN" then
+		ns.EvaluateSuppression()
 		local loadedMsg = "loaded. /wr to open the window."
-		if not GetBindingKey("WR_QUICKNOTE") then
+		if ns.IsSuppressed() then
+			loadedMsg = ns.SuppressionText():gsub("^Worth Remembering ", "") .. " /wr to change that."
+		elseif not GetBindingKey("WR_QUICKNOTE") then
 			loadedMsg = loadedMsg .. " Set a hotkey in Options -> General."
 		end
 		ns.Print(loadedMsg)
-		-- Each pcall'd separately so an error in one (e.g. an unexpected client
-		-- difference) can't silently stop the others from ever running.
-		local ok, prunedCount = pcall(ns.RunAutoPrune)
-		if not ok then
-			ns.Print("Auto-prune failed: " .. tostring(prunedCount))
-		elseif prunedCount > 0 then
-			ns.Print("Auto-pruned " .. prunedCount .. " player record(s).")
-		end
 		if ns.GetSettings().nearbyWindowEnabled then
 			local ok, err = pcall(ns.EnsureNearbyWindow)
 			if not ok then
@@ -35,36 +84,10 @@ frame:SetScript("OnEvent", function(_, event, loadedAddon)
 			ns.Print("Minimap button failed to load: " .. tostring(err))
 		end
 
-		-- recorded even when the option is off, so turning it back on only affects
-		-- future versions
-		local version = ns.GetAddonVersion()
-		local lastSeen = ns.GetLastSeenVersion()
-		if version and version ~= lastSeen then
-			-- nil on a fresh install, so the About tab only expands what's actually new
-			ns.UpdatedFromVersion = lastSeen
-			ns.SetLastSeenVersion(version)
-			if lastSeen == nil and #ns.GetAllPlayerKeys() == 0 then
-				ns.EnsureDemoPlayer()
-				ns.MarkTourOffered()
-				C_Timer.After(2, function()
-					StaticPopup_Show("WR_TOUR_OFFER")
-				end)
-			elseif ns.GetSettings().showPatchNotesOnUpdate then
-				C_Timer.After(1, function()
-					local shown, showErr = pcall(ns.SelectAboutTab)
-					if not shown then
-						ns.Print("Patch notes failed to open: " .. tostring(showErr))
-					end
-				end)
-			end
-		end
-
-		-- existing users never saw the new-install offer: once, on top of the patch notes
-		if not ns.WasTourOffered() then
-			ns.MarkTourOffered()
-			C_Timer.After(2, function()
-				StaticPopup_Show("WR_TOUR_OFFER_EXISTING")
-			end)
+		if ns.IsSuppressed() then
+			loginExtrasPending = true
+		else
+			runLoginExtras()
 		end
 	end
 end)

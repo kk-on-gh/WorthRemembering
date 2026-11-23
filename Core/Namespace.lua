@@ -43,6 +43,11 @@ ns.Defaults = {
 		showEntryCreatedMessage = true,
 		-- opens the About tab once after updating to a new version, see Core/Events.lua
 		showPatchNotesOnUpdate = true,
+		-- see Core/Suppress.lua. keys besides `all` are IsInInstance() types, plus resting
+		disable = { all = false, party = false, raid = false, pvp = false, arena = false, scenario = false, resting = false },
+		-- "default", "dark" or "ellesmere", see UI/Skin.lua. "" font is the theme's own
+		theme = "default",
+		font = "",
 		-- how a player's sex is shown: values ("binary" = Male/Female, "numbered" =
 		-- 1/2) and the column/label wording ("bodyType" or "sex"). see ns.SexDisplay
 		bodyTypeStyle = "binary",
@@ -253,6 +258,8 @@ ns.Defaults = {
 			-- the target's name above the wheel: "class" (their class color) or
 			-- "bracket" (their standing's color)
 			nameColor = "class",
+			-- "theme" (flat with a theme, classic without), "classic" or "flat"
+			wheelStyle = "theme",
 			radial1Labels = nil,
 			radial2Labels = nil,
 			radial1LabelsAll = nil,
@@ -904,7 +911,11 @@ end
 
 -- Shared "inset panel" look for filter bars etc.: a dark recessed box with a thin gold
 -- border. `frame` must have been created with the BackdropTemplate mixin.
-function ns.ApplyPanelBackdrop(frame, alpha)
+-- kind: the Skin.Panel kind under a theme, default by alpha
+function ns.ApplyPanelBackdrop(frame, alpha, kind)
+	if ns.Skin.Panel(frame, kind or ((alpha or 0.7) > 0.8 and "field" or "section")) then
+		return
+	end
 	frame:SetBackdrop({
 		bgFile = "Interface/Tooltips/UI-Tooltip-Background",
 		edgeFile = "Interface/Tooltips/UI-Tooltip-Border",

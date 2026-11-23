@@ -1,4 +1,5 @@
 local ns = WorthRemembering
+local Skin = ns.Skin
 
 -- index -> expanded bool. the most recent version starts expanded, plus (right after
 -- an update) every version newer than the one last seen, see expandMissedVersions
@@ -70,18 +71,24 @@ local function stopAllGlows()
 end
 
 local function addGlow(button)
-	local ok, glow = pcall(CreateFrame, "Frame", nil, button, "GlowBoxTemplate")
-	if not ok then
-		return nil
-	end
-	for _, key in ipairs({ "BG", "ShadowTopLeft", "ShadowTopRight", "ShadowBottomLeft", "ShadowBottomRight",
-		"ShadowTop", "ShadowBottom", "ShadowLeft", "ShadowRight" }) do
-		if glow[key] then
-			glow[key]:Hide()
+	local glow = Skin.CreateGlow(button)
+	if glow then
+		glow:Show()
+	else
+		local ok
+		ok, glow = pcall(CreateFrame, "Frame", nil, button, "GlowBoxTemplate")
+		if not ok then
+			return nil
 		end
+		for _, key in ipairs({ "BG", "ShadowTopLeft", "ShadowTopRight", "ShadowBottomLeft", "ShadowBottomRight",
+			"ShadowTop", "ShadowBottom", "ShadowLeft", "ShadowRight" }) do
+			if glow[key] then
+				glow[key]:Hide()
+			end
+		end
+		glow:SetPoint("TOPLEFT", -3, 3)
+		glow:SetPoint("BOTTOMRIGHT", 3, -3)
 	end
-	glow:SetPoint("TOPLEFT", -3, 3)
-	glow:SetPoint("BOTTOMRIGHT", 3, -3)
 	glow:EnableMouse(false)
 	local pulse = glow:CreateAnimationGroup()
 	pulse:SetLooping("BOUNCE")
@@ -99,7 +106,7 @@ local function addVersionBlock(index, entry, y)
 	header:SetPoint("RIGHT", -4, 0)
 	header:SetHeight(20)
 
-	local headerText = header:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local headerText = Skin.Text(header, "ARTWORK", "GameFontNormalSmall")
 	headerText:SetPoint("LEFT", 4, 0)
 	local shippedTag = entry.shipped and "" or "  |cffff6060(unreleased)|r"
 	headerText:SetText((expanded[index] and "[-] " or "[+] ") .. "v" .. entry.version .. " - " .. entry.date .. shippedTag)
@@ -119,6 +126,7 @@ local function addVersionBlock(index, entry, y)
 	if index <= FEATURE_TOUR_VERSIONS and ns.TOURS and ns.TOURS[tourId] then
 		local tourButton = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
 		tourButton:SetSize(170, 20)
+		Skin.Button(tourButton)
 		tourButton:SetPoint("TOPLEFT", 16, y - 2)
 		tourButton:SetText("Tour what's new in " .. entry.version)
 		tourButton:SetScript("OnClick", function() ns.StartTour(tourId) end)
@@ -137,7 +145,7 @@ local function addVersionBlock(index, entry, y)
 	-- optional plain paragraphs before the sections, no bullet
 	if entry.intro then
 		for _, paragraph in ipairs(entry.intro) do
-			local fs = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+			local fs = Skin.Text(scrollChild, "ARTWORK", "GameFontHighlightSmall")
 			fs:SetPoint("TOPLEFT", 16, y)
 			fs:SetWidth(scrollChild:GetWidth() - 32)
 			fs:SetJustifyH("LEFT")
@@ -150,15 +158,17 @@ local function addVersionBlock(index, entry, y)
 
 	for _, section in ipairs(entry.sections) do
 		if section.heading then
-			local sectionLabel = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+			local sectionLabel = Skin.Text(scrollChild, "ARTWORK", "GameFontNormalSmall")
 			sectionLabel:SetPoint("TOPLEFT", 16, y)
-			sectionLabel:SetTextColor(1, 0.82, 0)
+			if not Skin.Heading(sectionLabel, Skin.AccentColor()) then
+				sectionLabel:SetTextColor(1, 0.82, 0)
+			end
 			sectionLabel:SetText(section.heading)
 			y = y - 16
 		end
 
 		for _, item in ipairs(section.items) do
-			local fs = scrollChild:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+			local fs = Skin.Text(scrollChild, "ARTWORK", "GameFontHighlightSmall")
 			fs:SetPoint("TOPLEFT", 26, y)
 			fs:SetWidth(scrollChild:GetWidth() - 42)
 			fs:SetJustifyH("LEFT")
@@ -199,21 +209,21 @@ function ns.BuildAboutPanel(parent)
 	logo:SetPoint("TOPLEFT", 0, 0)
 	logo:SetTexture("Interface\\AddOns\\WorthRemembering\\Media\\PortraitIcon.png")
 
-	local title = header:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	local title = Skin.Text(header, "ARTWORK", "GameFontNormalLarge")
 	title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 14, -2)
 	title:SetText("Worth Remembering")
 	local titleFont, titleSize, titleFlags = title:GetFont()
 	titleSize = titleSize + 2
 	title:SetFont(titleFont, titleSize, titleFlags)
 
-	local version = header:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	local version = Skin.Text(header, "ARTWORK", "GameFontHighlightSmall")
 	version:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
 	version:SetText("Version " .. tostring(ns.GetAddonVersion()))
 
 	local patchCheck = ns.CreateSmallCheckbox(header, 24, ns.GetSettings().showPatchNotesOnUpdate,
 		function(checked) ns.GetSettings().showPatchNotesOnUpdate = checked end)
 	patchCheck:SetPoint("TOPLEFT", version, "BOTTOMLEFT", -4, -4)
-	local patchCheckLabel = header:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	local patchCheckLabel = Skin.Text(header, "ARTWORK", "GameFontHighlightSmall")
 	patchCheckLabel:SetPoint("LEFT", patchCheck, "RIGHT", 2, 0)
 	patchCheckLabel:SetText("Show patch notes for new versions")
 	ns.RegisterTourTarget("about.patchNotes", { patchCheck, patchCheckLabel })
@@ -221,6 +231,7 @@ function ns.BuildAboutPanel(parent)
 
 	local tourButton = CreateFrame("Button", nil, header, "UIPanelButtonTemplate")
 	tourButton:SetSize(120, 20)
+	Skin.Button(tourButton)
 	tourButton:SetPoint("LEFT", patchCheckLabel, "RIGHT", 16, 0)
 	tourButton:SetText("Take the Tour")
 	tourButton:SetScript("OnClick", function() ns.StartTour("basics") end)
@@ -228,6 +239,7 @@ function ns.BuildAboutPanel(parent)
 
 	local settingsTourButton = CreateFrame("Button", nil, header, "UIPanelButtonTemplate")
 	settingsTourButton:SetSize(120, 20)
+	Skin.Button(settingsTourButton)
 	settingsTourButton:SetPoint("LEFT", tourButton, "RIGHT", 6, 0)
 	settingsTourButton:SetText("Settings Tour")
 	settingsTourButton:SetScript("OnClick", function() ns.StartTour("settings") end)
@@ -236,7 +248,7 @@ function ns.BuildAboutPanel(parent)
 
 	-- wraps to whatever width the window allows; everything below anchors to its bottom
 	-- so a narrow window just pushes the patch notes down
-	local welcome = header:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	local welcome = Skin.Text(header, "ARTWORK", "GameFontHighlight")
 	welcome:SetPoint("TOPLEFT", logo, "BOTTOMLEFT", 0, -12)
 	welcome:SetPoint("RIGHT", header, "RIGHT", 0, 0)
 	welcome:SetJustifyH("LEFT")
@@ -246,7 +258,7 @@ function ns.BuildAboutPanel(parent)
 		.. "Every feature can be turned on or off, and most are highly customizable. Make it yours.\n"
 		.. "Please feel very free to share any feedback, bug reports, feature requests, etc with me, I'd love to hear from you.")
 
-	local patchNotesLabel = header:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local patchNotesLabel = Skin.Text(header, "ARTWORK", "GameFontNormalSmall")
 	patchNotesLabel:SetPoint("TOPLEFT", welcome, "BOTTOMLEFT", 0, -14)
 	patchNotesLabel:SetText("Patch Notes")
 	local font, _, flags = patchNotesLabel:GetFont()
@@ -254,7 +266,7 @@ function ns.BuildAboutPanel(parent)
 
 	-- right-aligned contact block. the values are read-only edit boxes so they can be
 	-- selected and copied, a plain FontString can't be
-	local contactHeading = header:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	local contactHeading = Skin.Text(header, "ARTWORK", "GameFontNormalSmall")
 	contactHeading:SetPoint("TOPRIGHT", 0, -2)
 	contactHeading:SetJustifyH("RIGHT")
 	contactHeading:SetText("For feedback, bug reports, feature requests, etc:")
@@ -264,13 +276,13 @@ function ns.BuildAboutPanel(parent)
 
 	local contactWidth = contactHeading:GetStringWidth()
 	local function addContactLine(anchor, label, value)
-		local measure = header:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+		local measure = Skin.Text(header, "ARTWORK", "GameFontHighlightSmall")
 		measure:SetText(value)
 		local width = math.ceil(measure:GetStringWidth()) + 4
 		measure:Hide()
 
 		local valueBox = CreateFrame("EditBox", nil, header)
-		valueBox:SetFontObject("GameFontHighlightSmall")
+		Skin.SetFont(valueBox, "GameFontHighlightSmall")
 		valueBox:SetAutoFocus(false)
 		valueBox:SetJustifyH("RIGHT")
 		valueBox:SetSize(width, lineHeight)
@@ -289,7 +301,7 @@ function ns.BuildAboutPanel(parent)
 		valueBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
 		ns.AttachTooltip(valueBox, "Click, then Ctrl+C to copy.")
 
-		local labelText = header:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		local labelText = Skin.Text(header, "ARTWORK", "GameFontNormalSmall")
 		labelText:SetPoint("RIGHT", valueBox, "LEFT", -4, 0)
 		labelText:SetText(label)
 		contactWidth = math.max(contactWidth, labelText:GetStringWidth() + 4 + width)
@@ -310,6 +322,7 @@ function ns.BuildAboutPanel(parent)
 	ns.SetGentleScroll(scroll)
 	scroll:SetPoint("TOPLEFT", patchNotesLabel, "BOTTOMLEFT", 0, -6)
 	scroll:SetPoint("BOTTOMRIGHT", -(PAD + 22), PAD)
+	Skin.ScrollBar(scroll)
 
 	scrollChild = CreateFrame("Frame", nil, scroll)
 	scroll:SetScrollChild(scrollChild)

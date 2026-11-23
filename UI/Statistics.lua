@@ -1,4 +1,5 @@
 local ns = WorthRemembering
+local Skin = ns.Skin
 
 local panel
 
@@ -325,12 +326,12 @@ local SECTION_HEADER_HEIGHT = 28
 -- total content height needed for the scroll frame is exact arithmetic, not something
 -- read back out of frame anchors after the fact.
 local function createSection(parent, title, topOffset)
-	local header = parent:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	local header = Skin.Text(parent, "ARTWORK", "GameFontNormalLarge")
 	header:SetPoint("TOPLEFT", 16, -topOffset)
 	header:SetText(title)
 
 	local divider = parent:CreateTexture(nil, "ARTWORK")
-	divider:SetColorTexture(1, 0.82, 0, 0.3)
+	Skin.Line(divider, 0.3)
 	divider:SetHeight(1)
 	divider:SetPoint("TOPLEFT", 16, -(topOffset + 22))
 	divider:SetPoint("RIGHT", parent, "RIGHT", -16, 0)
@@ -356,19 +357,21 @@ local function createTileGrid(parent, topOffset, tileDefs, columns)
 		ns.ApplyPanelBackdrop(box, 0.5)
 
 		if def.onClick then
-			local highlight = box:CreateTexture(nil, "HIGHLIGHT")
-			highlight:SetAllPoints()
-			highlight:SetColorTexture(1, 0.82, 0, 0.15)
+			if not Skin.Highlight(box, 0.15) then
+				local highlight = box:CreateTexture(nil, "HIGHLIGHT")
+				highlight:SetAllPoints()
+				highlight:SetColorTexture(1, 0.82, 0, 0.15)
+			end
 			box:SetScript("OnClick", function() def.onClick(currentStats) end)
 		end
 
-		local label = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+		local label = Skin.Text(box, "ARTWORK", "GameFontDisableSmall")
 		label:SetPoint("TOPLEFT", 10, -6)
 		label:SetPoint("TOPRIGHT", -10, -6)
 		label:SetJustifyH("LEFT")
 		label:SetText(def.label)
 
-		local value = box:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+		local value = Skin.Text(box, "ARTWORK", "GameFontNormalLarge")
 		value:SetPoint("TOPLEFT", 10, -20)
 		value:SetPoint("TOPRIGHT", -10, -20)
 		value:SetJustifyH("LEFT")
@@ -394,7 +397,7 @@ local BRACKET_TILE_WIDTH = 190
 -- clicking jumps to Players pre-filtered to that bracket.
 local function createBracketGrid(parent, topOffset)
 	for _, rowIndex in ipairs({ 1, 2, 3 }) do
-		local rowLabel = parent:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+		local rowLabel = Skin.Text(parent, "ARTWORK", "GameFontNormalSmall")
 		rowLabel:SetWidth(BRACKET_ROW_LABEL_WIDTH)
 		rowLabel:SetJustifyH("LEFT")
 		rowLabel:SetText(BRACKET_ROW_LABELS[rowIndex])
@@ -410,18 +413,20 @@ local function createBracketGrid(parent, topOffset)
 		box:SetPoint("TOPLEFT", x, -y)
 		ns.ApplyPanelBackdrop(box, 0.5)
 
-		local highlight = box:CreateTexture(nil, "HIGHLIGHT")
-		highlight:SetAllPoints()
-		highlight:SetColorTexture(1, 0.82, 0, 0.15)
+		if not Skin.Highlight(box, 0.15) then
+			local highlight = box:CreateTexture(nil, "HIGHLIGHT")
+			highlight:SetAllPoints()
+			highlight:SetColorTexture(1, 0.82, 0, 0.15)
+		end
 		box:SetScript("OnClick", function() ns.FilterPlayersByBracket(bracketSlotKey(slot)) end)
 
-		local label = box:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+		local label = Skin.Text(box, "ARTWORK", "GameFontDisableSmall")
 		label:SetPoint("TOPLEFT", 10, -6)
 		label:SetPoint("TOPRIGHT", -10, -6)
 		label:SetJustifyH("LEFT")
 		label:SetWordWrap(false)
 
-		local value = box:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+		local value = Skin.Text(box, "ARTWORK", "GameFontNormalLarge")
 		value:SetPoint("TOPLEFT", 10, -20)
 		value:SetPoint("TOPRIGHT", -10, -20)
 		value:SetJustifyH("LEFT")
@@ -485,6 +490,7 @@ function ns.BuildStatisticsPanel(parent)
 	ns.SetGentleScroll(scroll)
 	scroll:SetPoint("TOPLEFT", 0, 0)
 	scroll:SetPoint("BOTTOMRIGHT", -34, 0)
+	Skin.ScrollBar(scroll)
 
 	local scrollChild = CreateFrame("Frame", nil, scroll)
 	scrollChild:SetSize(1, 1)

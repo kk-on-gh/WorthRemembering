@@ -34,6 +34,9 @@ end
 local function showTooltip(self)
 	GameTooltip:SetOwner(self, "ANCHOR_LEFT")
 	GameTooltip:SetText("Worth Remembering")
+	if ns.IsSuppressed() then
+		GameTooltip:AddLine(ns.SuppressionText(), 1, 0.38, 0.38, true)
+	end
 	GameTooltip:AddLine("Left-click to open", 0.8, 0.8, 0.8)
 	GameTooltip:AddLine("Right-click for more options", 0.8, 0.8, 0.8)
 	GameTooltip:AddLine("Drag to move", 0.8, 0.8, 0.8)
@@ -43,10 +46,15 @@ end
 -- owned by UIParent, not the button: minimap button collectors can hide the button on
 -- the press that clicks a menu item, which would close the menu before the click lands
 local function showMenu()
-	MenuUtil.CreateContextMenu(UIParent, function(_, rootDescription)
+	ns.Skin.ContextMenu(UIParent, function(_, rootDescription)
 		rootDescription:CreateTitle("Worth Remembering")
 		rootDescription:CreateButton("Open Window", function() ns.ShowOverview() end)
 		rootDescription:CreateButton("Options", function() ns.SelectOptionsTab() end)
+		if ns.GetSettings().disable.all then
+			rootDescription:CreateButton("Enable Worth Remembering", function() ns.SetDisabledEntirely(false) end)
+		else
+			rootDescription:CreateButton("Disable Worth Remembering", function() ns.SetDisabledEntirely(true) end)
+		end
 		rootDescription:CreateDivider()
 		rootDescription:CreateButton("Hide Minimap Icon", function() ns.SetMinimapIconShown(false) end)
 	end)
@@ -72,6 +80,9 @@ local function createButton()
 	icon:SetTexture("Interface\\AddOns\\WorthRemembering\\Media\\MinimapIcon.png")
 	icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 	button.icon = icon
+	if ns.IsSuppressed() then
+		icon:SetDesaturated(true)
+	end
 
 	button:SetScript("OnEnter", showTooltip)
 	button:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -107,3 +118,10 @@ function ns.EnsureMinimapButton()
 	end
 	return button
 end
+
+-- gray while disabled
+ns.OnSuppressionChanged(function(now, stateChanged)
+	if button and stateChanged then
+		button.icon:SetDesaturated(now)
+	end
+end)

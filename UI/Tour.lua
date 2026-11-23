@@ -1,4 +1,5 @@
 local ns = WorthRemembering
+local Skin = ns.Skin
 
 -- step = { title, text, tab?, page? (Options sub-tab label), target? (ns.RegisterTourTarget
 --   name) or box? (Options section box title, expanded and scrolled to, then collapsed
@@ -72,10 +73,25 @@ ns.TOURS = {
 	},
 	-- "what's new" tours, one per version, started from that version's patch notes.
 	-- keep only the newest three, the About tab ignores older ones anyway
-	["v1.2.1"] = {
+	["v1.3"] = {
 		{
-			title = "What's new in 1.2.1",
+			title = "What's new in 1.3",
 			text = "A quick look at what's new.",
+		},
+		{
+			page = "general", box = "Main", side = "right", marks = { "options.look" },
+			title = "Themes and fonts",
+			text = "Pick a theme: Default, Dark, or EllesmereUI if you use it. Dark and EllesmereUI turn checkboxes into toggles and restyle the menus and the color picker.\n\nNext to it, pick any font the game has or your other addons share. Both change after a reload.",
+		},
+		{
+			page = "radial menu", box = "Radial Menu", side = "right", marks = { "options.radial.style" },
+			title = "Wheel style",
+			text = "The radial menu comes in four styles now: Classic, Ring, Tiles, and List.\n\nRing shows the full name of the preset you point at in the middle. List opens below the cursor: move down to a row and release. Match theme picks Ring with the Dark and EllesmereUI themes.",
+		},
+		{
+			page = "general", box = "Disabling", side = "right", marks = { "options.disable" },
+			title = "Disabling",
+			text = "Turn Worth Remembering off entirely, or only while you're in certain places, like battlegrounds. While it's off nothing runs on its own.\n\n/wr and the minimap button still open the window, and /wr off and /wr on switch it quickly.",
 		},
 		{
 			page = "general", box = "Nearby Window", side = "right", marks = { "options.nearby.hideEmpty" },
@@ -84,7 +100,7 @@ ns.TOURS = {
 		},
 		{
 			tab = "about",
-			title = "That's all for 1.2.1",
+			title = "That's all for 1.3",
 			text = "Thanks for using Worth Remembering!",
 		},
 	},
@@ -173,7 +189,7 @@ ns.TOURS = {
 		{
 			page = "general", box = "Main", side = "right",
 			title = "Main window",
-			text = "Opacity and UI scale, plus how dates, times, and body types are shown.",
+			text = "Opacity and UI scale, the theme and font, plus how dates, times, and body types are shown.",
 		},
 		{
 			page = "general", box = "Filters", side = "right",
@@ -199,6 +215,11 @@ ns.TOURS = {
 			page = "general", box = "Auto-Prune (on login)", side = "right",
 			title = "Auto-prune",
 			text = "Keeps the database tidy by deleting players that match these rules each time you log in. By default: no notes, no standing, and not seen for a day.",
+		},
+		{
+			page = "general", box = "Disabling", side = "right",
+			title = "Disabling",
+			text = "Turn Worth Remembering off entirely, or only in certain places, like battlegrounds. While it's off nothing runs on its own, and /wr or the minimap button still open the window.",
 		},
 		{
 			page = "general", box = "Danger Zone", side = "right",
@@ -248,7 +269,7 @@ ns.TOURS = {
 		{
 			page = "radial menu", box = "Radial Menu", side = "right",
 			title = "Radial menu",
-			text = "Hold the hotkey for a wheel of your presets. Use one wheel, or two, optionally splitting good and bad presets across two with a modifier key.",
+			text = "Hold the hotkey for a wheel of your presets. Use one wheel, or two, optionally splitting good and bad presets across two with a modifier key.\n\nWheel style picks how it looks: Classic, Ring, Tiles, or a List.",
 		},
 		{
 			page = "ignore", box = "Ignore by Relationship", side = "right",
@@ -440,13 +461,16 @@ local function buildCallout()
 	callout:EnableMouse(true)
 	callout:SetWidth(BOX_WIDTH)
 	tinsert(UISpecialFrames, "WRTourCallout")
+	Skin.Panel(callout, "float")
+	callout.artHost = Skin.CreateArtHost(callout)
 
-	callout.title = callout:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+	callout.title = Skin.Text(callout, "OVERLAY", "GameFontNormalLarge")
 	callout.title:SetPoint("TOPLEFT", PAD, -PAD)
 	callout.title:SetPoint("RIGHT", -28, 0)
 	callout.title:SetJustifyH("LEFT")
+	Skin.Heading(callout.title)
 
-	callout.body = callout:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	callout.body = Skin.Text(callout, "OVERLAY", "GameFontHighlight")
 	callout.body:SetPoint("TOPLEFT", callout.title, "BOTTOMLEFT", 0, -8)
 	callout.body:SetWidth(BOX_WIDTH - 2 * PAD)
 	callout.body:SetJustifyH("LEFT")
@@ -459,9 +483,11 @@ local function buildCallout()
 		ns.EndTour()
 		callout:Hide()
 	end)
+	Skin.CloseButton(close)
 
 	callout.next = CreateFrame("Button", nil, callout, "UIPanelButtonTemplate")
 	callout.next:SetSize(80, 22)
+	Skin.Button(callout.next)
 	callout.next:SetPoint("BOTTOMRIGHT", -PAD, PAD - 2)
 	callout.next:SetScript("OnClick", function()
 		if not (tour and stepIndex) then
@@ -475,6 +501,7 @@ local function buildCallout()
 
 	callout.back = CreateFrame("Button", nil, callout, "UIPanelButtonTemplate")
 	callout.back:SetSize(80, 22)
+	Skin.Button(callout.back)
 	callout.back:SetPoint("RIGHT", callout.next, "LEFT", -6, 0)
 	callout.back:SetText("Back")
 	callout.back:SetScript("OnClick", function()
@@ -485,7 +512,7 @@ local function buildCallout()
 		ns.ShowTourStep(stepIndex - 1)
 	end)
 
-	callout.counter = callout:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	callout.counter = Skin.Text(callout, "OVERLAY", "GameFontDisableSmall")
 	callout.counter:SetPoint("LEFT", callout, "BOTTOMLEFT", PAD, PAD + 9)
 
 	callout:SetScript("OnHide", function()
@@ -494,11 +521,11 @@ local function buildCallout()
 		end
 	end)
 
-	arrow = callout:CreateTexture(nil, "ARTWORK")
+	arrow = callout.artHost:CreateTexture(nil, "ARTWORK")
 	arrow:SetTexture(ARROW_FILE)
 	arrow:SetTexCoord(0.78515625, 0.99218750, 0.54687500, 0.58789063)
 	arrow:SetSize(53, 21)
-	glow = callout:CreateTexture(nil, "BORDER")
+	glow = callout.artHost:CreateTexture(nil, "BORDER")
 	glow:SetTexture(ARROW_FILE)
 	glow:SetTexCoord(0.40625000, 0.66015625, 0.77343750, 0.82812500)
 	glow:SetSize(65, 28)
@@ -515,12 +542,12 @@ local function buildCallout()
 		highlight:SetBackdropColor(0, 0, 0, 0)
 	end
 
-	alsoArrow = callout:CreateTexture(nil, "ARTWORK")
+	alsoArrow = callout.artHost:CreateTexture(nil, "ARTWORK")
 	alsoArrow:SetTexture(ARROW_FILE)
 	alsoArrow:SetTexCoord(0.78515625, 0.99218750, 0.54687500, 0.58789063)
 	alsoArrow:SetSize(37, 15)
 	alsoArrow:SetAlpha(0.8)
-	alsoGlow = callout:CreateTexture(nil, "BORDER")
+	alsoGlow = callout.artHost:CreateTexture(nil, "BORDER")
 	alsoGlow:SetTexture(ARROW_FILE)
 	alsoGlow:SetTexCoord(0.40625000, 0.66015625, 0.77343750, 0.82812500)
 	alsoGlow:SetSize(46, 20)

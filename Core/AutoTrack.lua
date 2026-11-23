@@ -143,8 +143,7 @@ end
 local pendingRosterUpdate
 
 local frame = CreateFrame("Frame")
-frame:RegisterEvent("GROUP_ROSTER_UPDATE")
-frame:SetScript("OnEvent", function(_, event)
+ns.GateEvents(frame, { "GROUP_ROSTER_UPDATE" }, function(_, event)
 	if event == "GROUP_ROSTER_UPDATE" then
 		partiedKeys = nil
 		if pendingRosterUpdate then
@@ -194,8 +193,7 @@ local function onQuestTurnedIn()
 end
 
 local questFrame = CreateFrame("Frame")
-questFrame:RegisterEvent("QUEST_TURNED_IN")
-questFrame:SetScript("OnEvent", onQuestTurnedIn)
+ns.GateEvents(questFrame, { "QUEST_TURNED_IN" }, onQuestTurnedIn)
 
 -- RESURRECT_REQUEST gives a bare name only, no unit token. you're dead so your target
 -- could be anyone, resolved the same way /wr resolves a typed name: target first, then
@@ -217,8 +215,7 @@ local function onResurrectRequest(name)
 end
 
 local rezFrame = CreateFrame("Frame")
-rezFrame:RegisterEvent("RESURRECT_REQUEST")
-rezFrame:SetScript("OnEvent", function(_, _, name)
+ns.GateEvents(rezFrame, { "RESURRECT_REQUEST" }, function(_, _, name)
 	onResurrectRequest(name)
 end)
 
@@ -276,9 +273,7 @@ local function onChatEmote(text, playerName, guid)
 end
 
 local emoteFrame = CreateFrame("Frame")
-emoteFrame:RegisterEvent("CHAT_MSG_EMOTE")
-emoteFrame:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
-emoteFrame:SetScript("OnEvent", function(_, _, text, playerName, ...)
+ns.GateEvents(emoteFrame, { "CHAT_MSG_EMOTE", "CHAT_MSG_TEXT_EMOTE" }, function(_, _, text, playerName, ...)
 	-- scanned by pattern instead of a fixed arg position: this event's trailing args
 	-- don't match the documented order on this server (confirmed live, see the
 	-- playerName issue above), but a GUID always looks like "Player-...".
@@ -368,9 +363,7 @@ local function onPlayerAura(unit, info)
 end
 
 local auraFrame = CreateFrame("Frame")
-auraFrame:RegisterUnitEvent("UNIT_AURA", "player")
-auraFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-auraFrame:SetScript("OnEvent", function(_, event, unit, info)
+ns.GateEvents(auraFrame, { { "UNIT_AURA", "player" }, "PLAYER_ENTERING_WORLD" }, function(_, event, unit, info)
 	if event == "PLAYER_ENTERING_WORLD" then
 		buffQuietUntil = GetTime() + 3
 		return
@@ -473,8 +466,7 @@ local function onSystemMessage(msg)
 end
 
 local systemFrame = CreateFrame("Frame")
-systemFrame:RegisterEvent("CHAT_MSG_SYSTEM")
-systemFrame:SetScript("OnEvent", function(_, _, msg)
+ns.GateEvents(systemFrame, { "CHAT_MSG_SYSTEM" }, function(_, _, msg)
 	pcall(onSystemMessage, msg)
 end)
 
@@ -584,5 +576,13 @@ local function onInstanceTransition()
 end
 
 local instanceFrame = CreateFrame("Frame")
-instanceFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-instanceFrame:SetScript("OnEvent", onInstanceTransition)
+ns.GateEvents(instanceFrame, { "PLAYER_ENTERING_WORLD" }, onInstanceTransition)
+
+-- a run interrupted by disabling isn't finished later: no completion log or survey
+ns.OnSuppressionChanged(function(now, stateChanged)
+	if now and stateChanged then
+		currentInstanceID = nil
+		currentInstanceName = nil
+		dungeonStartLogged = false
+	end
+end)

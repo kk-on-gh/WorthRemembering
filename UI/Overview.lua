@@ -1,4 +1,5 @@
 local ns = WorthRemembering
+local Skin = ns.Skin
 
 local MIN_WIDTH, MIN_HEIGHT = 960, 480
 -- first-open size, before the user has resized it: always exactly 16:9 (handy for
@@ -796,7 +797,9 @@ local function render(row, item)
 		row.minusButton:SetSize(20, 18)
 		row.minusButton:SetText("-")
 		row.minusButton:SetPoint("LEFT", 0, 0)
-		local minusTint = row.minusButton:CreateTexture(nil, "ARTWORK", nil, -1)
+		Skin.Button(row.minusButton)
+		Skin.Sign(row.minusButton, "-")
+		local minusTint = Skin.CreateArtHost(row.minusButton):CreateTexture(nil, "ARTWORK", nil, -1)
 		minusTint:SetPoint("TOPLEFT", 3, -3)
 		minusTint:SetPoint("BOTTOMRIGHT", -3, 3)
 		minusTint:SetColorTexture(0.6, 0.18, 0.18, 0.65)
@@ -805,7 +808,9 @@ local function render(row, item)
 		row.plusButton:SetSize(20, 18)
 		row.plusButton:SetText("+")
 		row.plusButton:SetPoint("LEFT", row.minusButton, "RIGHT", 2, 0)
-		local plusTint = row.plusButton:CreateTexture(nil, "ARTWORK", nil, -1)
+		Skin.Button(row.plusButton)
+		Skin.Sign(row.plusButton, "+")
+		local plusTint = Skin.CreateArtHost(row.plusButton):CreateTexture(nil, "ARTWORK", nil, -1)
 		plusTint:SetPoint("TOPLEFT", 3, -3)
 		plusTint:SetPoint("BOTTOMRIGHT", -3, 3)
 		plusTint:SetColorTexture(0.2, 0.45, 0.2, 0.65)
@@ -814,6 +819,7 @@ local function render(row, item)
 		row.newButton:SetSize(44, 18)
 		row.newButton:SetText("New")
 		row.newButton:SetPoint("LEFT", row.cells.notes, "LEFT", 26, 0)
+		Skin.Button(row.newButton)
 
 		row.cellButtons.standing = row.standingButtons
 		row.cellButtons.notes = row.newButton
@@ -967,6 +973,9 @@ local function setTab(index)
 	if PanelTemplates_SetTab then
 		PanelTemplates_SetTab(mainFrame, index)
 	end
+	for i, tab in ipairs(mainFrame.tabButtons or {}) do
+		Skin.SetTabSelected(tab, i == index)
+	end
 	mainFrame.selectedTab = index
 	selectTab(index)
 end
@@ -985,6 +994,7 @@ local function createTabs()
 			tab:SetPoint("TOPLEFT", 14, -36)
 		end
 		tab:SetScript("OnClick", function(self) setTab(self:GetID()) end)
+		Skin.Tab(tab)
 		prevTab = tab
 		tabs[i] = tab
 		ns.RegisterTourTarget("tab." .. label:lower(), tab)
@@ -1168,6 +1178,7 @@ local function createPlayersContent()
 		},
 	})
 	local clearFiltersButton = CreateFrame("Button", nil, classRaceBar, "UIPanelButtonTemplate")
+	Skin.Button(clearFiltersButton)
 	clearFiltersButton:SetSize(100, 20)
 	clearFiltersButton:SetText("Clear Filters")
 	clearFiltersButton:SetPoint("RIGHT", -8, 0)
@@ -1188,7 +1199,7 @@ local function createPlayersContent()
 		render = render,
 		onClick = function(item) ns.ShowPlayerDetails(item.key) end,
 		onRightClick = function(item, rowFrame)
-			MenuUtil.CreateContextMenu(rowFrame, function(_, rootDescription)
+			Skin.ContextMenu(rowFrame, function(_, rootDescription)
 				local name = ns.DisplayName(item.record, item.key)
 				rootDescription:CreateTitle(name)
 				rootDescription:CreateButton("View Details", function() ns.ShowPlayerDetails(item.key) end)
@@ -1369,6 +1380,7 @@ local function createResizeGrip()
 	grip:SetNormalTexture("Interface/ChatFrame/UI-ChatIM-SizeGrabber-Up")
 	grip:SetHighlightTexture("Interface/ChatFrame/UI-ChatIM-SizeGrabber-Highlight")
 	grip:SetPushedTexture("Interface/ChatFrame/UI-ChatIM-SizeGrabber-Down")
+	Skin.ResizeGrip(grip)
 	-- hand-rolled instead of StartSizing, whose cursor-delta math breaks under this
 	-- frame's configurable SetScale, turning a small drag into an instant huge resize
 	-- (see the identical fix in NearbyWindow.lua).
@@ -1444,14 +1456,17 @@ local function createMainFrame()
 	-- Border only, no bgFile: a tooltip-style bgFile stays slightly translucent even at
 	-- full backdrop-color alpha, so opacity comes entirely from the separate fill
 	-- texture below instead.
-	mainFrame:SetBackdrop({
-		edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
-		edgeSize = 32,
-		insets = { left = 11, right = 12, top = 12, bottom = 11 },
-	})
-	-- untinted, this border reads as plain stone gray. gold matches the rest of the
-	-- addon's accent color (tab borders, scrollbar divider, etc).
-	mainFrame:SetBackdropBorderColor(0.85, 0.68, 0.3, 1)
+	local skinned = Skin.Window(mainFrame)
+	if not skinned then
+		mainFrame:SetBackdrop({
+			edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
+			edgeSize = 32,
+			insets = { left = 11, right = 12, top = 12, bottom = 11 },
+		})
+		-- untinted, this border reads as plain stone gray. gold matches the rest of the
+		-- addon's accent color (tab borders, scrollbar divider, etc).
+		mainFrame:SetBackdropBorderColor(0.85, 0.68, 0.3, 1)
+	end
 	mainFrame:SetAlpha(ns.GetSettings().windowAlpha)
 	mainFrame:SetScale(ns.GetSettings().uiScale)
 	mainFrame:Hide()
@@ -1459,44 +1474,54 @@ local function createMainFrame()
 	-- existed that would otherwise load already hanging off the bottom of the screen
 	ns.ReclampMainFrame()
 
-	-- top/right/bottom pulled in a few px less than the backdrop's own declared insets:
-	-- at those insets exactly, a thin sliver of whatever's behind the window showed
-	-- through between the border art and this fill (left wasn't affected, left alone)
-	local fill = mainFrame:CreateTexture(nil, "BACKGROUND", nil, -8)
-	fill:SetPoint("TOPLEFT", 11, -9)
-	fill:SetPoint("BOTTOMRIGHT", -9, 8)
-	fill:SetColorTexture(0.1, 0.08, 0.06, 1)
+	local footerBand
+	if skinned then
+		footerBand = Skin.CreateArtHost(mainFrame):CreateTexture(nil, "BACKGROUND", nil, -4)
+		footerBand:SetPoint("BOTTOMLEFT", 1, 1)
+		footerBand:SetPoint("BOTTOMRIGHT", -1, 1)
+		footerBand:SetHeight(33)
+		Skin.Band(footerBand)
+	else
+		-- top/right/bottom pulled in a few px less than the backdrop's own declared insets:
+		-- at those insets exactly, a thin sliver of whatever's behind the window showed
+		-- through between the border art and this fill (left wasn't affected, left alone)
+		local fill = mainFrame:CreateTexture(nil, "BACKGROUND", nil, -8)
+		fill:SetPoint("TOPLEFT", 11, -9)
+		fill:SetPoint("BOTTOMRIGHT", -9, 8)
+		fill:SetColorTexture(0.1, 0.08, 0.06, 1)
 
-	-- Banded header/footer: flat color fills (no texture assets needed) so the title bar
-	-- and status footer read as distinct bands from the body. The header covers only the
-	-- title row, not the tabs below it.
-	local headerBand = mainFrame:CreateTexture(nil, "BACKGROUND", nil, -4)
-	headerBand:SetPoint("TOPLEFT", 14, -12)
-	headerBand:SetPoint("TOPRIGHT", -14, -12)
-	headerBand:SetHeight(22)
-	headerBand:SetColorTexture(0.42, 0.3, 0.14, 1)
+		-- Banded header/footer: flat color fills (no texture assets needed) so the title bar
+		-- and status footer read as distinct bands from the body. The header covers only the
+		-- title row, not the tabs below it.
+		local headerBand = mainFrame:CreateTexture(nil, "BACKGROUND", nil, -4)
+		headerBand:SetPoint("TOPLEFT", 14, -12)
+		headerBand:SetPoint("TOPRIGHT", -14, -12)
+		headerBand:SetHeight(22)
+		headerBand:SetColorTexture(0.42, 0.3, 0.14, 1)
 
-	local footerBand = mainFrame:CreateTexture(nil, "BACKGROUND", nil, -4)
-	footerBand:SetPoint("BOTTOMLEFT", 14, 12)
-	footerBand:SetPoint("BOTTOMRIGHT", -14, 12)
-	footerBand:SetHeight(22)
-	footerBand:SetColorTexture(0.42, 0.3, 0.14, 1)
+		footerBand = mainFrame:CreateTexture(nil, "BACKGROUND", nil, -4)
+		footerBand:SetPoint("BOTTOMLEFT", 14, 12)
+		footerBand:SetPoint("BOTTOMRIGHT", -14, 12)
+		footerBand:SetHeight(22)
+		footerBand:SetColorTexture(0.42, 0.3, 0.14, 1)
 
-	-- stock Blizzard art (Achievement UI's parchment grain), not custom, laid over the
-	-- flat band color as a subtle texture instead of a flat fill.
-	local headerGrain = mainFrame:CreateTexture(nil, "BACKGROUND", nil, -3)
-	headerGrain:SetAllPoints(headerBand)
-	headerGrain:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Parchment-Horizontal")
-	headerGrain:SetVertexColor(0.75, 0.6, 0.35, 0.75)
+		-- stock Blizzard art (Achievement UI's parchment grain), not custom, laid over the
+		-- flat band color as a subtle texture instead of a flat fill.
+		local headerGrain = mainFrame:CreateTexture(nil, "BACKGROUND", nil, -3)
+		headerGrain:SetAllPoints(headerBand)
+		headerGrain:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Parchment-Horizontal")
+		headerGrain:SetVertexColor(0.75, 0.6, 0.35, 0.75)
 
-	local footerGrain = mainFrame:CreateTexture(nil, "BACKGROUND", nil, -3)
-	footerGrain:SetAllPoints(footerBand)
-	footerGrain:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Parchment-Horizontal")
-	footerGrain:SetVertexColor(0.75, 0.6, 0.35, 0.75)
+		local footerGrain = mainFrame:CreateTexture(nil, "BACKGROUND", nil, -3)
+		footerGrain:SetAllPoints(footerBand)
+		footerGrain:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Parchment-Horizontal")
+		footerGrain:SetVertexColor(0.75, 0.6, 0.35, 0.75)
+	end
 
-	local title = mainFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	local title = Skin.Text(mainFrame, "ARTWORK", "GameFontNormalLarge")
 	title:SetPoint("TOP", 0, -14)
 	title:SetText("Worth Remembering")
+	Skin.Title(title, mainFrame)
 
 	-- both close and minimize use the same plain UIPanelButtonTemplate at the same size
 	-- so they line up off each other. UIPanelCloseButton's hit-box padding doesn't match
@@ -1509,26 +1534,37 @@ local function createMainFrame()
 	close:SetPoint("TOPRIGHT", -18, -13)
 	close:SetText("X")
 	close:SetScript("OnClick", function() mainFrame:Hide() end)
+	Skin.CloseButton(close, mainFrame)
 
 	local minimizeButton = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
 	minimizeButton:SetSize(20, 20)
 	minimizeButton:SetPoint("RIGHT", close, "LEFT", -4, 0)
 	minimizeButton:SetText("_")
+	Skin.Button(minimizeButton)
 
 	-- dark text, not the usual light GameFontDisableSmall gray, since it sits on the
 	-- light gold footer band, gray-on-gold read as low contrast.
-	mainFrame.footer = mainFrame:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+	mainFrame.footer = Skin.Text(mainFrame, "ARTWORK", "GameFontNormalSmall")
 	-- centered in the band, since the larger text no longer fits a fixed bottom offset
 	mainFrame.footer:SetPoint("LEFT", footerBand, "LEFT", 6, 0)
 	local footerFont, _, footerFlags = mainFrame.footer:GetFont()
 	mainFrame.footer:SetFont(footerFont, 12, footerFlags)
-	mainFrame.footer:SetTextColor(0.06, 0.04, 0.02, 1)
-	-- GameFontNormalSmall's baked-in dark shadow is meant for light text on a dark
-	-- background; with dark text on this band it just reads as smudged. Clear it.
-	mainFrame.footer:SetShadowOffset(0, 0)
+	if skinned then
+		mainFrame.footer:SetTextColor(1, 1, 1, 0.6)
+	else
+		mainFrame.footer:SetTextColor(0.06, 0.04, 0.02, 1)
+		-- GameFontNormalSmall's baked-in dark shadow is meant for light text on a dark
+		-- background; with dark text on this band it just reads as smudged. Clear it.
+		mainFrame.footer:SetShadowOffset(0, 0)
+	end
 	mainFrame.footer:SetText("")
 
 	local tabButtons = createTabs()
+	mainFrame.tabButtons = tabButtons
+	ns.UpdateDisabledNotice()
+	for i, tab in ipairs(tabButtons) do
+		Skin.SetTabSelected(tab, i == 1)
+	end
 	createPlayersContent()
 
 	mainFrame.historyContent = CreateFrame("Frame", nil, mainFrame)
@@ -1624,6 +1660,47 @@ local function createMainFrame()
 		end
 	end)
 end
+
+-- right of the tabs while Worth Remembering is disabled; built the first time it's needed
+local notice
+
+function ns.UpdateDisabledNotice()
+	if not mainFrame then
+		return
+	end
+	local text = ns.SuppressionText()
+	if not text then
+		if notice then
+			notice:Hide()
+		end
+		return
+	end
+	if not notice then
+		notice = CreateFrame("Frame", nil, mainFrame)
+		notice:SetPoint("TOPRIGHT", -18, -42)
+		notice:SetSize(1, 22)
+		notice.button = CreateFrame("Button", nil, notice, "UIPanelButtonTemplate")
+		notice.button:SetSize(80, 20)
+		notice.button:SetPoint("RIGHT")
+		Skin.Button(notice.button)
+		notice.text = Skin.Text(notice, "ARTWORK", "GameFontNormalSmall")
+		notice.text:SetPoint("RIGHT", notice.button, "LEFT", -10, 0)
+		notice.text:SetTextColor(1, 0.38, 0.38)
+	end
+	notice.text:SetText(text)
+	if ns.SuppressionReason() == "entirely" then
+		notice.button:SetText("Enable")
+		notice.button:SetScript("OnClick", function() ns.SetDisabledEntirely(false) end)
+	else
+		notice.button:SetText("Settings")
+		notice.button:SetScript("OnClick", function()
+			ns.SelectOptionsTab()
+			ns.SelectOptionsSubTab("general")
+		end)
+	end
+	notice:Show()
+end
+ns.OnSuppressionChanged(ns.UpdateDisabledNotice)
 
 function ns.EnsureMainFrame()
 	if not mainFrame then

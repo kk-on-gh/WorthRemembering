@@ -18,6 +18,7 @@ end
 local function printUsage()
 	ns.Print("commands:")
 	print("  /wr                     - open the Worth Remembering window")
+	print("  /wr off | on            - disable Worth Remembering entirely, or enable it again")
 	print("  /wr note <name> <text>  - add a note entry")
 	print("  /wr rep <name> <delta>  - add a standing-change entry")
 	print("  /wr show <name>         - print a player's record")
@@ -187,6 +188,16 @@ SlashCmdList["WR"] = function(msg)
 
 	if cmd == "" then
 		ns.ToggleOverview()
+	elseif cmd == "off" or cmd == "disable" then
+		ns.SetDisabledEntirely(true)
+		ns.Print("disabled entirely. /wr on to enable it again.")
+	elseif cmd == "on" or cmd == "enable" then
+		ns.SetDisabledEntirely(false)
+		if ns.IsSuppressed() then
+			ns.Print(ns.SuppressionText():gsub("^Worth Remembering ", "") .. " Change that in Options > General > Disabling.")
+		else
+			ns.Print("enabled.")
+		end
 	elseif cmd == "note" then
 		cmdNote(rest)
 	elseif cmd == "rep" then
@@ -221,6 +232,10 @@ end
 -- you already know which preset you want. quotes optional, slash commands don't do
 -- shell-style quote parsing anyway
 local function cmdQuick(msg)
+	if ns.IsSuppressed() then
+		ns.NotifySuppressed()
+		return
+	end
 	local label = msg:match('^%s*"(.-)"%s*$') or msg:match("^%s*(.-)%s*$")
 	if not label or label == "" then
 		ns.Print('Usage: /wrquick <preset label>')

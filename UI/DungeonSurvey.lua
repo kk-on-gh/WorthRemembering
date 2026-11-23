@@ -1,4 +1,5 @@
 local ns = WorthRemembering
+local Skin = ns.Skin
 
 -- Popup shown after a dungeon/raid completion (see Core/AutoTrack.lua's
 -- onInstanceTransition), listing every party/raid member with a note box, a
@@ -88,7 +89,7 @@ local function acquireRow(index)
 	row.classIcon:SetPoint("LEFT", 2, 0)
 	row.classIcon:EnableMouse(true)
 
-	row.name = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	row.name = Skin.Text(row, "ARTWORK", "GameFontHighlightSmall")
 	row.name:SetPoint("LEFT", row.classIcon, "RIGHT", ICON_GAP, 0)
 	row.name:SetWidth(nameColWidth)
 	row.name:SetJustifyH("LEFT")
@@ -102,6 +103,7 @@ local function acquireRow(index)
 	row.noteBox:SetSize(noteBoxWidthFor(totalWidth), 18)
 	row.noteBox:SetPoint("LEFT", row.name, "RIGHT", NAME_GAP, 0)
 	row.noteBox:SetAutoFocus(false)
+	Skin.EditBox(row.noteBox)
 
 	-- isSelected always false: this is a one-shot "pick to fill the note box and rep
 	-- delta" action, not a persistent per-row selection worth highlighting afterward.
@@ -120,7 +122,9 @@ local function acquireRow(index)
 	row.minusButton:SetSize(MINUS_W, 18)
 	row.minusButton:SetText("-")
 	row.minusButton:SetPoint("LEFT", row.roleDropdown, "RIGHT", PRESET_GAP, 0)
-	local minusTint = row.minusButton:CreateTexture(nil, "ARTWORK", nil, -1)
+	Skin.Button(row.minusButton)
+	Skin.Sign(row.minusButton, "-")
+	local minusTint = Skin.CreateArtHost(row.minusButton):CreateTexture(nil, "ARTWORK", nil, -1)
 	minusTint:SetPoint("TOPLEFT", 3, -3)
 	minusTint:SetPoint("BOTTOMRIGHT", -3, 3)
 	minusTint:SetColorTexture(0.6, 0.18, 0.18, 0.65)
@@ -146,7 +150,9 @@ local function acquireRow(index)
 	row.plusButton:SetSize(PLUS_W, 18)
 	row.plusButton:SetText("+")
 	row.plusButton:SetPoint("LEFT", row.deltaBox, "RIGHT", DELTA_GAP, 0)
-	local plusTint = row.plusButton:CreateTexture(nil, "ARTWORK", nil, -1)
+	Skin.Button(row.plusButton)
+	Skin.Sign(row.plusButton, "+")
+	local plusTint = Skin.CreateArtHost(row.plusButton):CreateTexture(nil, "ARTWORK", nil, -1)
 	plusTint:SetPoint("TOPLEFT", 3, -3)
 	plusTint:SetPoint("BOTTOMRIGHT", -3, 3)
 	plusTint:SetColorTexture(0.2, 0.45, 0.2, 0.65)
@@ -181,12 +187,20 @@ end
 
 local measureName = UIParent:CreateFontString(nil, "BACKGROUND", "GameFontHighlightSmall")
 measureName:Hide()
+-- created at load, before the theme is known: the theme font goes on at first use
+local measureFontSet = false
 
 -- sized to the longest name actually showing (including the "(standing)" suffix when
 -- present), clamped to [NAME_MIN_WIDTH, NAME_MAX_WIDTH] -- otherwise it's either a wide
 -- fixed column leaving dead space when every name's short, or too narrow and clipping
 -- when one isn't.
 local function updateNameColumnWidth()
+	if not measureFontSet then
+		measureFontSet = true
+		if Skin.FontOn() then
+			Skin.SetFont(measureName, "GameFontHighlightSmall")
+		end
+	end
 	local longest = NAME_MIN_WIDTH
 	for _, member in ipairs(members) do
 		local identity = member.identity
@@ -369,6 +383,7 @@ local function createResizeGrip()
 	grip:SetNormalTexture("Interface/ChatFrame/UI-ChatIM-SizeGrabber-Up")
 	grip:SetHighlightTexture("Interface/ChatFrame/UI-ChatIM-SizeGrabber-Highlight")
 	grip:SetPushedTexture("Interface/ChatFrame/UI-ChatIM-SizeGrabber-Down")
+	Skin.ResizeGrip(grip)
 	grip:SetScript("OnMouseDown", function()
 		-- re-anchored to a fixed TOPLEFT before resizing starts: the popup normally
 		-- opens CENTER-anchored, and resizing a CENTER-anchored frame grows it from the
@@ -429,46 +444,50 @@ local function createPopup()
 		popup:SetMaxResize(UIParent:GetWidth(), UIParent:GetHeight())
 	end
 	popup:SetScript("OnMouseDown", function() popup:Raise() end)
-	popup:SetBackdrop({
-		edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
-		edgeSize = 24,
-		insets = { left = 8, right = 8, top = 8, bottom = 8 },
-	})
+	if not Skin.Window(popup) then
+		popup:SetBackdrop({
+			edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
+			edgeSize = 24,
+			insets = { left = 8, right = 8, top = 8, bottom = 8 },
+		})
 
-	local fill = popup:CreateTexture(nil, "BACKGROUND", nil, -8)
-	fill:SetPoint("TOPLEFT", 8, -8)
-	fill:SetPoint("BOTTOMRIGHT", -8, 8)
-	fill:SetColorTexture(0.1, 0.08, 0.06, 1)
+		local fill = popup:CreateTexture(nil, "BACKGROUND", nil, -8)
+		fill:SetPoint("TOPLEFT", 8, -8)
+		fill:SetPoint("BOTTOMRIGHT", -8, 8)
+		fill:SetColorTexture(0.1, 0.08, 0.06, 1)
+	end
 
 	local close = CreateFrame("Button", nil, popup, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", 2, 2)
 	close:SetScript("OnClick", function() popup:Hide() end)
+	Skin.CloseButton(close, popup)
 
-	popup.title = popup:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	popup.title = Skin.Text(popup, "ARTWORK", "GameFontNormalLarge")
 	popup.title:SetPoint("TOP", 0, -16)
+	Skin.Title(popup.title, popup)
 
-	popup.hint = popup:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	popup.hint = Skin.Text(popup, "ARTWORK", "GameFontDisableSmall")
 	popup.hint:SetPoint("TOP", popup.title, "BOTTOM", 0, -6)
 	popup.hint:SetText("A row left blank (no note, no standing change) is skipped on save.")
 
 	-- column headers: x-offsets match each widget's own position in acquireRow below
 	-- (scrollChild starts at the scroll frame's own TOPLEFT, 20px in from popup's own
 	-- left edge, same inset used here)
-	local nameHeader = popup:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local nameHeader = Skin.Text(popup, "ARTWORK", "GameFontDisableSmall")
 	nameHeader:SetPoint("TOPLEFT", 44, -58)
 	nameHeader:SetText("Name")
 
-	local noteHeader = popup:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	local noteHeader = Skin.Text(popup, "ARTWORK", "GameFontDisableSmall")
 	noteHeader:SetPoint("TOPLEFT", 250, -58)
 	noteHeader:SetText("Note")
 
 	-- presetHeader/repHeader are the module-level forward-declared locals (not new
 	-- ones): their x position depends on the note box's current width, so
 	-- relayoutColumns repositions them on every resize instead of them staying fixed
-	presetHeader = popup:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	presetHeader = Skin.Text(popup, "ARTWORK", "GameFontDisableSmall")
 	presetHeader:SetText("Preset")
 
-	repHeader = popup:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+	repHeader = Skin.Text(popup, "ARTWORK", "GameFontDisableSmall")
 	repHeader:SetText("Rep")
 
 	popup.scroll = CreateFrame("ScrollFrame", nil, popup, "UIPanelScrollFrameTemplate")
@@ -476,6 +495,7 @@ local function createPopup()
 	ns.SetGentleScroll(popup.scroll)
 	popup.scroll:SetPoint("TOPLEFT", 20, -72)
 	popup.scroll:SetPoint("BOTTOMRIGHT", -34, 46)
+	Skin.ScrollBar(popup.scroll)
 	-- fires on every resize (live during a grip drag, and once right after this
 	-- SetSize call establishes the restored/default size), keeping row/header layout
 	-- in sync with however wide the window actually is
@@ -488,12 +508,14 @@ local function createPopup()
 
 	popup.skipButton = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
 	popup.skipButton:SetSize(90, 24)
+	Skin.Button(popup.skipButton)
 	popup.skipButton:SetPoint("BOTTOMLEFT", 20, 14)
 	popup.skipButton:SetText("Skip")
 	popup.skipButton:SetScript("OnClick", function() popup:Hide() end)
 
 	popup.saveButton = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
 	popup.saveButton:SetSize(110, 24)
+	Skin.Button(popup.saveButton)
 	popup.saveButton:SetPoint("BOTTOMRIGHT", -20, 14)
 	popup.saveButton:SetText("Save All")
 	popup.saveButton:SetScript("OnClick", saveAll)
@@ -551,26 +573,30 @@ local function createConfirmPrompt()
 	confirmPrompt:SetScale(ns.GetSettings().uiScale)
 	ns.MakePopupDraggable(confirmPrompt, "surveyConfirm")
 	confirmPrompt:SetScript("OnMouseDown", function() confirmPrompt:Raise() end)
-	confirmPrompt:SetBackdrop({
-		edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
-		edgeSize = 24,
-		insets = { left = 8, right = 8, top = 8, bottom = 8 },
-	})
+	if not Skin.Window(confirmPrompt) then
+		confirmPrompt:SetBackdrop({
+			edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
+			edgeSize = 24,
+			insets = { left = 8, right = 8, top = 8, bottom = 8 },
+		})
 
-	local fill = confirmPrompt:CreateTexture(nil, "BACKGROUND", nil, -8)
-	fill:SetPoint("TOPLEFT", 8, -8)
-	fill:SetPoint("BOTTOMRIGHT", -8, 8)
-	fill:SetColorTexture(0.1, 0.08, 0.06, 1)
+		local fill = confirmPrompt:CreateTexture(nil, "BACKGROUND", nil, -8)
+		fill:SetPoint("TOPLEFT", 8, -8)
+		fill:SetPoint("BOTTOMRIGHT", -8, 8)
+		fill:SetColorTexture(0.1, 0.08, 0.06, 1)
+	end
 
 	local close = CreateFrame("Button", nil, confirmPrompt, "UIPanelCloseButton")
 	close:SetPoint("TOPRIGHT", 2, 2)
 	close:SetScript("OnClick", function() confirmPrompt:Hide() end)
+	Skin.CloseButton(close, confirmPrompt)
 
-	confirmPrompt.title = confirmPrompt:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+	confirmPrompt.title = Skin.Text(confirmPrompt, "ARTWORK", "GameFontNormalLarge")
 	confirmPrompt.title:SetPoint("TOP", 0, -16)
 	confirmPrompt.title:SetText("Worth Remembering")
+	Skin.Title(confirmPrompt.title, confirmPrompt)
 
-	confirmPrompt.body = confirmPrompt:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	confirmPrompt.body = Skin.Text(confirmPrompt, "ARTWORK", "GameFontHighlightSmall")
 	confirmPrompt.body:SetPoint("TOP", confirmPrompt.title, "BOTTOM", 0, -10)
 	confirmPrompt.body:SetPoint("LEFT", 16, 0)
 	confirmPrompt.body:SetPoint("RIGHT", -16, 0)
@@ -582,9 +608,10 @@ local function createConfirmPrompt()
 	-- "Skip the "fill out survey?" prompt" checkbox
 	confirmPrompt.skipCheck = CreateFrame("CheckButton", nil, confirmPrompt, "UICheckButtonTemplate")
 	confirmPrompt.skipCheck:SetSize(20, 20)
+	Skin.Checkbox(confirmPrompt.skipCheck)
 	confirmPrompt.skipCheck:SetPoint("BOTTOMLEFT", 16, 68)
 
-	local skipLabel = confirmPrompt:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	local skipLabel = Skin.Text(confirmPrompt, "ARTWORK", "GameFontHighlightSmall")
 	skipLabel:SetPoint("LEFT", confirmPrompt.skipCheck, "RIGHT", 2, 0)
 	skipLabel:SetText("Don't ask me again")
 
@@ -592,9 +619,10 @@ local function createConfirmPrompt()
 	-- grays out what no longer applies while it's off
 	confirmPrompt.disableCheck = CreateFrame("CheckButton", nil, confirmPrompt, "UICheckButtonTemplate")
 	confirmPrompt.disableCheck:SetSize(20, 20)
+	Skin.Checkbox(confirmPrompt.disableCheck)
 	confirmPrompt.disableCheck:SetPoint("BOTTOMLEFT", 16, 46)
 
-	local disableLabel = confirmPrompt:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+	local disableLabel = Skin.Text(confirmPrompt, "ARTWORK", "GameFontHighlightSmall")
 	disableLabel:SetPoint("LEFT", confirmPrompt.disableCheck, "RIGHT", 2, 0)
 	disableLabel:SetText("Disable instance surveys")
 
@@ -615,6 +643,7 @@ local function createConfirmPrompt()
 
 	confirmPrompt.noButton = CreateFrame("Button", nil, confirmPrompt, "UIPanelButtonTemplate")
 	confirmPrompt.noButton:SetSize(90, 24)
+	Skin.Button(confirmPrompt.noButton)
 	confirmPrompt.noButton:SetPoint("BOTTOMLEFT", 16, 14)
 	confirmPrompt.noButton:SetText("Skip")
 	confirmPrompt.noButton:SetScript("OnClick", function()
@@ -626,6 +655,7 @@ local function createConfirmPrompt()
 
 	confirmPrompt.yesButton = CreateFrame("Button", nil, confirmPrompt, "UIPanelButtonTemplate")
 	confirmPrompt.yesButton:SetSize(110, 24)
+	Skin.Button(confirmPrompt.yesButton)
 	confirmPrompt.yesButton:SetPoint("BOTTOMRIGHT", -16, 14)
 	confirmPrompt.yesButton:SetText("Open Survey")
 	confirmPrompt.yesButton:SetScript("OnClick", function()

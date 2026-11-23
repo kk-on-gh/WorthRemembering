@@ -1,4 +1,5 @@
 local ns = WorthRemembering
+local Skin = ns.Skin
 
 -- Holding the Quick Note keybind opens a radial picker of your quick-add presets at the
 -- cursor; releasing without moving (a tap) falls through to the normal QuickNoteTarget
@@ -16,6 +17,10 @@ local ns = WorthRemembering
 -- own binding ahead of time instead, same as RL_RadialMenu's own rings.
 
 local DEADZONE = 23 -- px, UIParent-space
+-- list style: rows start this far below where the key went down, picked by how far the
+-- cursor moved down; sideways drift doesn't matter
+local LIST_TOP = DEADZONE + 1
+local LIST_ROW = 24
 
 -- a wheel with too many slices gets hard to aim, dual-mode selections are capped here.
 -- exported so the Options tab's dropdown can enforce the same limit
@@ -200,6 +205,15 @@ local PRE_CLICK = ([[
 	end
 
 	local count = self:GetAttribute("wr-count") or 0
+	if self:GetAttribute("wr-list") then
+		local row = math.floor((-dy - %d) / %d) + 1
+		if row < 1 or row > count then
+			owner:CallMethod("OnCancel", ring)
+		else
+			owner:CallMethod("OnPick", ring, row)
+		end
+		return false
+	end
 	if count == 0 or inDeadzone then
 		owner:CallMethod("OnCancel", ring)
 		return false
@@ -209,7 +223,7 @@ local PRE_CLICK = ([[
 	local index = math.floor((offset + step / 2) / step) %% count + 1
 	owner:CallMethod("OnPick", ring, index)
 	return false
-]]):format(DEADZONE, DEADZONE)
+]]):format(DEADZONE, DEADZONE, LIST_TOP, LIST_ROW)
 
 SecureHandlerWrapScript(RingButton1, "OnClick", Controller, PRE_CLICK)
 SecureHandlerWrapScript(RingButton2, "OnClick", Controller, PRE_CLICK)
@@ -234,6 +248,50 @@ local BG_SIZE = WHEEL_SIZE * 1.6
 -- font sizes are set explicitly rather than via GameFontHighlight/GameFontNormalLarge's
 -- own baked-in sizes, so these can run bigger than any stock template offers
 local NAME_FONT_PATH = GameFontNormal:GetFont()
+
+local function fontPath()
+	return Skin.FacePath() or NAME_FONT_PATH
+end
+
+local MEDIA = "Interface\\AddOns\\" .. ns.name .. "\\Media\\"
+
+-- Tiles style: flat buttons around the center ring, no disc. Side buttons grow away from
+-- the center, top and bottom ones are centered on their slice.
+local FLAT_CENTER_SIZE = 2 * (DEADZONE + 4)
+local FLAT_POINTER_SIZE = FLAT_CENTER_SIZE + 16
+local PILL_RADIUS = 64 -- center to each button's inner edge
+local PILL_HEIGHT = 24
+local PILL_PAD = 12
+local PILL_FONT_SIZE = 14
+local PILL_MIX = 0.35 -- hovered button: this much of its preset color over the surface
+local PILL_SIDE = 0.25 -- past this |cos|, a button grows sideways instead of up or down
+
+-- Ring style: one segment per preset with gaps between, each label fitted inside its own
+-- segment (two lines at most, then cut), the hovered label in full in the center hub.
+-- Segments are a flat texture clipped by two angular masks (pushed in by half the gap)
+-- and a baked ring mask, the same technique as the classic wedge highlight.
+local RING_IN, RING_OUT = 44, 136 -- RadialRing.png's hole is baked at RING_IN / RING_OUT
+local RING_GAP, RING_PAD = 4, 3
+local HUB_RADIUS = 40 -- RadialHubRim.png is baked for this
+local RING_FONT_SIZE, RING_LINE = 12, 15
+local RING_MIX = 0.32
+local RING_ALPHA, RING_HOVER_ALPHA = 0.92, 0.96
+local POINTER_HALF = math.rad(28)
+local ELLIPSIS = "..."
+
+local LIST_HEADER = 30
+local LIST_LEFT = 16 -- where the key went down, in from the list's left edge
+local LIST_PAD = 12
+local LIST_FONT_SIZE = 14
+
+-- "classic", "ring", "tiles" or "list"
+local function wheelStyle()
+	local style = ns.GetSettings().radialMenu.wheelStyle
+	if style == "classic" or style == "ring" or style == "tiles" or style == "list" then
+		return style
+	end
+	return Skin.IsActive() and "ring" or "classic"
+end
 local NAME_FONT_SIZE = 20
 local LABEL_FONT_SIZE = 15
 local LABEL_FONT_SIZE_HIGHLIGHT = 19
@@ -277,12 +335,32 @@ local function ensureWheel()
 	wheel:SetSize(WHEEL_SIZE, WHEEL_SIZE)
 	wheel:SetFrameStrata("DIALOG")
 	wheel:Hide()
+	wheel.style = wheelStyle()
+	wheel.flat = wheel.style == "ring" or wheel.style == "tiles"
+	wheel.list = wheel.style == "list"
 	wheel.bg = wheel:CreateTexture(nil, "BACKGROUND")
 	wheel.bg:SetPoint("CENTER")
-	-- useAtlasSize=false: passing true here resizes the texture to the atlas's own native
-	-- size, clobbering the explicit SetSize right after it
-	wheel.bg:SetAtlas("Radial_Wheel_BG", false)
-	wheel.bg:SetSize(BG_SIZE, BG_SIZE)
+	if wheel.list then
+		local r, g, b = Skin.SurfaceColor()
+		wheel.bg:SetColorTexture(r, g, b, RING_HOVER_ALPHA)
+		wheel.listLine = wheel:CreateTexture(nil, "BORDER")
+		wheel.listLine:SetColorTexture(Skin.BorderColor())
+		wheel.listLine:SetHeight(1)
+	elseif wheel.style == "ring" then
+		wheel.bg:SetTexture(MEDIA .. "RadialDisc.png")
+		local r, g, b = Skin.SurfaceColor()
+		wheel.bg:SetVertexColor(r, g, b, RING_ALPHA)
+		wheel.bg:SetSize(2 * HUB_RADIUS, 2 * HUB_RADIUS)
+	elseif wheel.flat then
+		wheel.bg:SetTexture(MEDIA .. "RadialDisc.png")
+		wheel.bg:SetVertexColor(Skin.SurfaceColor())
+		wheel.bg:SetSize(FLAT_CENTER_SIZE, FLAT_CENTER_SIZE)
+	else
+		-- useAtlasSize=false: passing true here resizes the texture to the atlas's own native
+		-- size, clobbering the explicit SetSize right after it
+		wheel.bg:SetAtlas("Radial_Wheel_BG", false)
+		wheel.bg:SetSize(BG_SIZE, BG_SIZE)
+	end
 
 	-- marks where the deadzone ends, dim while a slice is actively selected and bright
 	-- while hovering dead center (same ring Blizzard's own ping wheel uses for its
@@ -291,7 +369,12 @@ local function ensureWheel()
 	-- been confirmed itself yet -- if it doesn't exist, SetAtlas just renders nothing.
 	wheel.deadzoneRing = wheel:CreateTexture(nil, "ARTWORK", nil, 1)
 	wheel.deadzoneRing:SetPoint("CENTER")
-	wheel.deadzoneRing:SetAtlas("Radial_Wheel_Select_Close", true)
+	if wheel.style == "tiles" then
+		wheel.deadzoneRing:SetTexture(MEDIA .. "RadialCenter.png")
+		wheel.deadzoneRing:SetSize(FLAT_CENTER_SIZE, FLAT_CENTER_SIZE)
+	elseif wheel.style == "classic" then
+		wheel.deadzoneRing:SetAtlas("Radial_Wheel_Select_Close", true)
+	end
 	wheel.deadzoneRing:SetAlpha(0.45)
 
 	-- glowing arrow that tracks the raw cursor angle continuously (not snapped to a
@@ -299,24 +382,69 @@ local function ensureWheel()
 	-- deadzone before a pick is even possible. same unverified-atlas caveat as above.
 	wheel.pointer = wheel:CreateTexture(nil, "OVERLAY", nil, -1)
 	wheel.pointer:SetPoint("CENTER")
-	wheel.pointer:SetAtlas("Radial_Wheel_Select_Pointer", true)
+	if wheel.flat then
+		if wheel.style == "ring" then
+			-- an arc on the hub's edge, facing the cursor
+			wheel.pointer:SetTexture(CLIP_MASK_TEXTURE)
+			wheel.pointer:SetSize(2 * HUB_RADIUS, 2 * HUB_RADIUS)
+			local rim = wheel:CreateMaskTexture()
+			rim:SetPoint("CENTER")
+			rim:SetTexture(MEDIA .. "RadialHubRim.png", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+			rim:SetSize(2 * HUB_RADIUS, 2 * HUB_RADIUS)
+			wheel.pointer:AddMaskTexture(rim)
+			wheel.pointerMasks = { wheel:CreateMaskTexture(), wheel:CreateMaskTexture() }
+			for _, mask in ipairs(wheel.pointerMasks) do
+				mask:SetTexture(CLIP_MASK_TEXTURE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+				mask:SetSize(CLIP_MASK_SIZE, CLIP_MASK_SIZE)
+				wheel.pointer:AddMaskTexture(mask)
+			end
+			wheel.ringMask = wheel:CreateMaskTexture()
+			wheel.ringMask:SetPoint("CENTER")
+			wheel.ringMask:SetTexture(MEDIA .. "RadialRing.png", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+			wheel.ringMask:SetSize(2 * RING_OUT, 2 * RING_OUT)
+			wheel.rimMask = wheel:CreateMaskTexture()
+			wheel.rimMask:SetPoint("CENTER")
+			wheel.rimMask:SetTexture(MEDIA .. "RadialRim.png", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+			wheel.rimMask:SetSize(2 * RING_OUT, 2 * RING_OUT)
+			wheel.hubText = wheel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+			wheel.hubText:SetFont(fontPath(), RING_FONT_SIZE, "")
+			wheel.hubText:SetSpacing(RING_LINE - RING_FONT_SIZE)
+			wheel.hubText:SetJustifyH("CENTER")
+			wheel.hubText:SetPoint("CENTER")
+		else
+			wheel.pointer:SetTexture(MEDIA .. "RadialPointer.png")
+			wheel.pointer:SetSize(FLAT_POINTER_SIZE, FLAT_POINTER_SIZE)
+		end
+		local pointer = wheel.pointer
+		local function paintPointer()
+			pointer:SetVertexColor(Skin.AccentColor())
+		end
+		paintPointer()
+		Skin.OnChanged(paintPointer)
+	elseif wheel.style == "classic" then
+		wheel.pointer:SetAtlas("Radial_Wheel_Select_Pointer", true)
+	end
 	wheel.pointer:Hide()
 
 	-- dark fade behind the name, same atlas as the wheel itself so it reads as part of
 	-- the same art instead of a plain box; resized to the name's own text width each
 	-- time it changes (see updateActiveUnitDisplay), since names vary a lot in length
 	wheel.nameBg = wheel:CreateTexture(nil, "BACKGROUND")
-	wheel.nameBg:SetAtlas("Radial_Wheel_BG", false)
+	if wheel.flat then
+		wheel.nameBg:SetColorTexture(Skin.SurfaceColor())
+	elseif wheel.style == "classic" then
+		wheel.nameBg:SetAtlas("Radial_Wheel_BG", false)
+	end
 	wheel.nameBg:Hide()
 
 	wheel.nameText = wheel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-	wheel.nameText:SetFont(NAME_FONT_PATH, NAME_FONT_SIZE, "OUTLINE")
+	wheel.nameText:SetFont(fontPath(), NAME_FONT_SIZE, "OUTLINE")
 	wheel.nameText:SetPoint("BOTTOM", wheel, "TOP", 0, 6)
 	wheel.nameText:Hide()
 	wheel.nameBg:SetPoint("CENTER", wheel.nameText)
 
 	-- shown instead of slices when an enabled second radial has no presets picked yet
-	wheel.emptyText = wheel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+	wheel.emptyText = Skin.Text(wheel, "OVERLAY", "GameFontHighlight")
 	wheel.emptyText:SetPoint("CENTER", 0, -RADIUS)
 	wheel.emptyText:SetWidth(200)
 	wheel.emptyText:SetJustifyH("CENTER")
@@ -506,7 +634,15 @@ end
 -- wrap once highlighted; SetWordWrap(true) on the label itself (see ensureLabelWidgets)
 -- stays on as a fallback for anything still too wide after that (a single long word, say)
 local function setLabelText(label, text)
-	measureLabel:SetFont(NAME_FONT_PATH, LABEL_FONT_SIZE_HIGHLIGHT, "OUTLINE")
+	if label.segment then
+		label.fullText = text:gsub("%s+", " "):gsub("^ ", ""):gsub(" $", "")
+		return
+	end
+	if label.pill or label.row then
+		label:SetText(text)
+		return
+	end
+	measureLabel:SetFont(fontPath(), LABEL_FONT_SIZE_HIGHLIGHT, "OUTLINE")
 	measureLabel:SetText(text)
 	if measureLabel:GetStringWidth() > LABEL_MAX_WIDTH then
 		text = bestLineBreak(text)
@@ -522,7 +658,52 @@ local function ensureLabelWidgets(count)
 	ensureWheel()
 	sliceCount = count
 	for i = 1, math.max(count, #labels) do
-		if i <= count and not labels[i] then
+		if i <= count and not labels[i] and wheel.list then
+			local label = wheel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+			label:SetFont(fontPath(), LIST_FONT_SIZE, "")
+			label:SetWordWrap(false)
+			label.row = { fill = wheel:CreateTexture(nil, "ARTWORK"), bar = wheel:CreateTexture(nil, "ARTWORK", nil, 1) }
+			labels[i] = label
+		elseif i <= count and not labels[i] and wheel.style == "ring" then
+			local segment = {}
+			for key, sublevel in pairs({ fill = 0, rim = 1 }) do
+				local tex = wheel:CreateTexture(nil, "ARTWORK", nil, sublevel)
+				tex:SetTexture(CLIP_MASK_TEXTURE)
+				tex:SetSize(2 * RING_OUT, 2 * RING_OUT)
+				tex:SetPoint("CENTER")
+				segment[key] = tex
+			end
+			segment.masks = { wheel:CreateMaskTexture(), wheel:CreateMaskTexture() }
+			for _, mask in ipairs(segment.masks) do
+				mask:SetTexture(CLIP_MASK_TEXTURE, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+				mask:SetSize(CLIP_MASK_SIZE, CLIP_MASK_SIZE)
+				segment.fill:AddMaskTexture(mask)
+				segment.rim:AddMaskTexture(mask)
+			end
+			segment.fill:AddMaskTexture(wheel.ringMask)
+			segment.rim:AddMaskTexture(wheel.rimMask)
+			segment.rim:Hide()
+			local label = wheel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+			label:SetFont(fontPath(), RING_FONT_SIZE, "")
+			label:SetSpacing(RING_LINE - RING_FONT_SIZE)
+			label:SetJustifyH("CENTER")
+			label.segment = segment
+			labels[i] = label
+		elseif i <= count and not labels[i] and wheel.flat then
+			local pill = CreateFrame("Frame", nil, wheel)
+			pill:SetHeight(PILL_HEIGHT)
+			pill.edge = pill:CreateTexture(nil, "BACKGROUND")
+			pill.edge:SetAllPoints()
+			pill.fill = pill:CreateTexture(nil, "BORDER")
+			pill.fill:SetPoint("TOPLEFT", 1, -1)
+			pill.fill:SetPoint("BOTTOMRIGHT", -1, 1)
+			local label = pill:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+			label:SetFont(fontPath(), PILL_FONT_SIZE, "")
+			label:SetPoint("CENTER")
+			label:SetWordWrap(false)
+			label.pill = pill
+			labels[i] = label
+		elseif i <= count and not labels[i] then
 			local label = wheel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 			label:SetWidth(LABEL_MAX_WIDTH)
 			label:SetWordWrap(true)
@@ -531,11 +712,287 @@ local function ensureLabelWidgets(count)
 		end
 		if labels[i] then
 			labels[i]:SetShown(i <= count)
+			if labels[i].pill then
+				labels[i].pill:SetShown(i <= count)
+			end
+			if labels[i].segment then
+				labels[i].segment.fill:SetShown(i <= count)
+				labels[i].segment.rim:Hide()
+			end
+			if labels[i].row then
+				labels[i].row.fill:SetShown(i <= count)
+				labels[i].row.bar:SetShown(i <= count)
+			end
 		end
 	end
 end
 
+-- side buttons grow away from the center, top and bottom ones sit centered on their slice;
+-- the name goes above the highest one
+local function positionPills(count)
+	local top = FLAT_CENTER_SIZE / 2
+	for i = 1, count do
+		local label = labels[i]
+		local pill = label.pill
+		pill:SetWidth(math.ceil(label:GetStringWidth()) + 2 * PILL_PAD)
+		local angle = math.rad(90 - (i - 1) * 360 / count)
+		local c, s = math.cos(angle), math.sin(angle)
+		local x, y = c * PILL_RADIUS, s * PILL_RADIUS
+		pill:ClearAllPoints()
+		if c > PILL_SIDE then
+			pill:SetPoint("LEFT", wheel, "CENTER", x, y)
+			top = math.max(top, y + PILL_HEIGHT / 2)
+		elseif c < -PILL_SIDE then
+			pill:SetPoint("RIGHT", wheel, "CENTER", x, y)
+			top = math.max(top, y + PILL_HEIGHT / 2)
+		elseif s > 0 then
+			pill:SetPoint("BOTTOM", wheel, "CENTER", x, y)
+			top = math.max(top, y + PILL_HEIGHT)
+		else
+			pill:SetPoint("TOP", wheel, "CENTER", x, y)
+		end
+	end
+	wheel.nameText:ClearAllPoints()
+	wheel.nameText:SetPoint("BOTTOM", wheel, "CENTER", 0, top + 12)
+end
+
+-- keeps a mask's square edge on the line at `angle`, `inset` px into the sector
+local function placeEdgeMask(mask, angle, inward, inset)
+	local distance = CLIP_MASK_SIZE / 2 + inset
+	mask:ClearAllPoints()
+	mask:SetPoint("CENTER", wheel, "CENTER", math.cos(inward) * distance, math.sin(inward) * distance)
+	mask:SetRotation(angle)
+end
+
+-- clips to the sector between low and high (radians), each edge pushed in by `inset`
+local function clipToSector(masks, low, high, inset)
+	placeEdgeMask(masks[1], high, high - math.pi / 2, inset)
+	placeEdgeMask(masks[2], low, low + math.pi / 2, inset)
+end
+
+local function textWidth(text)
+	measureLabel:SetText(text)
+	return measureLabel:GetStringWidth()
+end
+
+local function dropLastChar(text)
+	return (text:gsub("[%z\1-\127\192-\255][\128-\191]*$", ""))
+end
+
+local function cutToWidth(text, width)
+	if textWidth(text) <= width then
+		return text
+	end
+	while text ~= "" and textWidth(text .. ELLIPSIS) > width do
+		text = dropLastChar(text)
+	end
+	return text:gsub(" $", "") .. ELLIPSIS
+end
+
+local function inSegment(x, y, center, half)
+	local r = math.sqrt(x * x + y * y)
+	if r < RING_IN + RING_PAD or r > RING_OUT - RING_PAD then
+		return false
+	end
+	local diff = (math.atan2(y, x) - center + math.pi) % (2 * math.pi) - math.pi
+	if math.abs(diff) > half then
+		return false
+	end
+	if half < math.pi then
+		for _, edge in ipairs({ center - half, center + half }) do
+			if math.abs(-math.sin(edge) * x + math.cos(edge) * y) < RING_GAP / 2 + RING_PAD then
+				return false
+			end
+		end
+	end
+	return true
+end
+
+-- widest one-line text box centered on cx at height y that stays inside the segment
+local function rowWidth(cx, y, center, half)
+	local low, high = 0, 2 * RING_OUT
+	for _ = 1, 16 do
+		local w = (low + high) / 2
+		local fits = true
+		for _, corner in ipairs({ { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } }) do
+			if not inSegment(cx + corner[1] * w / 2, y + corner[2] * RING_FONT_SIZE / 2, center, half) then
+				fits = false
+				break
+			end
+		end
+		if fits then
+			low = w
+		else
+			high = w
+		end
+	end
+	return low
+end
+
+-- one line if it fits, else as many whole words as fit on the first line and the rest on
+-- the second, each line cut to its own room
+local function fitSegmentText(text, cx, cy, center, half)
+	local single = rowWidth(cx, cy, center, half)
+	if textWidth(text) <= single then
+		return text
+	end
+	local topWidth = rowWidth(cx, cy + RING_LINE / 2, center, half)
+	local bottomWidth = rowWidth(cx, cy - RING_LINE / 2, center, half)
+	local words = {}
+	for word in text:gmatch("%S+") do
+		words[#words + 1] = word
+	end
+	local first, k = words[1] or "", 2
+	while words[k] and textWidth(first .. " " .. words[k]) <= topWidth do
+		first = first .. " " .. words[k]
+		k = k + 1
+	end
+	local rest = table.concat(words, " ", k)
+	if rest == "" then
+		return cutToWidth(first, single)
+	end
+	return cutToWidth(first, topWidth) .. "\n" .. cutToWidth(rest, bottomWidth)
+end
+
+local function hubRowWidth(y)
+	local radius = HUB_RADIUS - 6
+	local v = math.abs(y) + RING_FONT_SIZE / 2
+	if v >= radius then
+		return 0
+	end
+	return 2 * math.sqrt(radius * radius - v * v)
+end
+
+-- the longest leading piece of `text` within `width`, by whole words when one fits
+local function takeLine(text, width)
+	local line = ""
+	for word in text:gmatch("%S+") do
+		local trial = line == "" and word or (line .. " " .. word)
+		if textWidth(trial) > width then
+			break
+		end
+		line = trial
+	end
+	if line == "" then
+		for char in text:gmatch("[%z\1-\127\192-\255][\128-\191]*") do
+			if line ~= "" and textWidth(line .. char) > width then
+				break
+			end
+			line = line .. char
+		end
+	end
+	return line, (text:sub(#line + 1):gsub("^ ", ""))
+end
+
+-- the full label in up to three lines, breaking long words when it has to
+local function fitHubText(text)
+	for count = 1, 3 do
+		local lines, rest, fits = {}, text, true
+		for k = 1, count do
+			local width = hubRowWidth(RING_LINE * ((count - 1) / 2 - (k - 1)))
+			if k == count then
+				lines[k] = rest
+				fits = fits and textWidth(rest) <= width
+			else
+				lines[k], rest = takeLine(rest, width)
+			end
+			if rest == "" and k < count then
+				break
+			end
+		end
+		if fits or count == 3 then
+			for k, line in ipairs(lines) do
+				lines[k] = cutToWidth(line, hubRowWidth(RING_LINE * ((#lines - 1) / 2 - (k - 1))))
+			end
+			return table.concat(lines, "\n")
+		end
+	end
+end
+
+local function layoutRing(count)
+	measureLabel:SetFont(fontPath(), RING_FONT_SIZE, "")
+	local half = math.pi / count
+	local mid = (RING_IN + RING_OUT) / 2 + 3
+	for i = 1, count do
+		local label = labels[i]
+		local center = math.rad(90 - (i - 1) * 360 / count)
+		if count > 1 then
+			clipToSector(label.segment.masks, center - half, center + half, RING_GAP / 2)
+		else
+			for _, mask in ipairs(label.segment.masks) do
+				mask:ClearAllPoints()
+				mask:SetPoint("CENTER")
+			end
+		end
+		local cx, cy = math.cos(center) * mid, math.sin(center) * mid
+		label:SetText(fitSegmentText(label.fullText or "", cx, cy, center, half))
+		label:ClearAllPoints()
+		label:SetPoint("CENTER", wheel, "CENTER", cx, cy)
+		label.hubText = fitHubText(label.fullText or "")
+	end
+	wheel.nameText:ClearAllPoints()
+	wheel.nameText:SetPoint("BOTTOM", wheel, "CENTER", 0, RING_OUT + 14)
+end
+
+-- a panel hanging just below where the key went down: the name on top, one row per preset
+local function layoutList(count)
+	local width = math.max(140, wheel.nameText:GetStringWidth() + 2 * LIST_PAD)
+	for i = 1, count do
+		width = math.max(width, labels[i]:GetStringWidth() + 2 * LIST_PAD)
+	end
+	width = math.ceil(width)
+	local left, headerTop = -LIST_LEFT, -LIST_TOP + LIST_HEADER
+	wheel.bg:ClearAllPoints()
+	wheel.bg:SetPoint("TOPLEFT", wheel, "CENTER", left, headerTop)
+	wheel.bg:SetSize(width, LIST_HEADER + math.max(count, 1) * LIST_ROW)
+	wheel.listLine:ClearAllPoints()
+	wheel.listLine:SetPoint("TOPLEFT", wheel, "CENTER", left, -LIST_TOP)
+	wheel.listLine:SetWidth(width)
+	for i = 1, count do
+		local label, row = labels[i], labels[i].row
+		local top = -LIST_TOP - (i - 1) * LIST_ROW
+		row.fill:ClearAllPoints()
+		row.fill:SetPoint("TOPLEFT", wheel, "CENTER", left, top)
+		row.fill:SetSize(width, LIST_ROW)
+		row.bar:ClearAllPoints()
+		row.bar:SetPoint("TOPLEFT", wheel, "CENTER", left, top)
+		row.bar:SetSize(3, LIST_ROW)
+		label:ClearAllPoints()
+		label:SetPoint("LEFT", wheel, "CENTER", left + LIST_PAD, top - LIST_ROW / 2)
+	end
+	wheel.nameText:ClearAllPoints()
+	wheel.nameText:SetPoint("LEFT", wheel, "CENTER", left + LIST_PAD, -LIST_TOP + LIST_HEADER / 2)
+	wheel.emptyText:ClearAllPoints()
+	wheel.emptyText:SetPoint("TOPLEFT", wheel, "CENTER", left + LIST_PAD, -LIST_TOP - 4)
+	wheel.emptyText:SetWidth(width - 2 * LIST_PAD)
+	wheel.emptyText:SetJustifyH("LEFT")
+end
+
+-- points the pointer at `angle` (radians): the classic and tiles art rotate, the ring's
+-- arc is re-clipped
+local function pointAt(angle)
+	if wheel.list then
+		return
+	elseif wheel.style == "ring" then
+		clipToSector(wheel.pointerMasks, angle - POINTER_HALF, angle + POINTER_HALF, 0)
+	else
+		wheel.pointer:SetRotation(angle)
+	end
+end
+
 local function positionLabels(count)
+	if wheel.list then
+		layoutList(count)
+		return
+	end
+	if wheel.style == "ring" then
+		layoutRing(count)
+		return
+	end
+	if wheel.flat then
+		positionPills(count)
+		return
+	end
 	for i = 1, count do
 		local label = labels[i]
 		local angle = math.rad(90 - (i - 1) * 360 / count)
@@ -546,15 +1003,102 @@ local function positionLabels(count)
 	layoutDividers(count)
 end
 
+-- neutral presets use the accent
+local function pillColor(color)
+	if color == PRESET_COLOR.neutral then
+		return Skin.AccentColor()
+	end
+	return unpack(color.glow)
+end
+
+local function setPillHighlight(index)
+	local sr, sg, sb = Skin.SurfaceColor()
+	for i, label in ipairs(labels) do
+		local color = label.presetColor or PRESET_COLOR.neutral
+		local pill = label.pill
+		if i == index then
+			local r, g, b = pillColor(color)
+			pill.fill:SetColorTexture(sr + (r - sr) * PILL_MIX, sg + (g - sg) * PILL_MIX, sb + (b - sb) * PILL_MIX, 1)
+			pill.edge:SetColorTexture(r, g, b, 1)
+			label:SetTextColor(1, 1, 1)
+		else
+			pill.fill:SetColorTexture(sr, sg, sb, 1)
+			pill.edge:SetColorTexture(Skin.BorderColor())
+			label:SetTextColor(unpack(color.base))
+		end
+	end
+	wheel.deadzoneRing:SetAlpha(index and 0.45 or 1)
+end
+
+local function setRingHighlight(index)
+	local sr, sg, sb = Skin.SurfaceColor()
+	for i, label in ipairs(labels) do
+		local color = label.presetColor or PRESET_COLOR.neutral
+		local segment = label.segment
+		if i == index then
+			local r, g, b
+			if color == PRESET_COLOR.neutral then
+				r, g, b = Skin.AccentColor()
+			else
+				r, g, b = unpack(color.base)
+			end
+			segment.fill:SetVertexColor(sr + (r - sr) * RING_MIX, sg + (g - sg) * RING_MIX, sb + (b - sb) * RING_MIX, RING_HOVER_ALPHA)
+			segment.rim:SetVertexColor(r, g, b, 1)
+			segment.rim:Show()
+			label:SetTextColor(1, 1, 1)
+		else
+			segment.fill:SetVertexColor(sr, sg, sb, RING_ALPHA)
+			segment.rim:Hide()
+			label:SetTextColor(unpack(color.base))
+		end
+	end
+	wheel.hubText:SetText(index and labels[index] and labels[index].hubText or "")
+end
+
+local function setListHighlight(index)
+	local sr, sg, sb = Skin.SurfaceColor()
+	for i, label in ipairs(labels) do
+		local color = label.presetColor or PRESET_COLOR.neutral
+		local row = label.row
+		if i == index then
+			local r, g, b
+			if color == PRESET_COLOR.neutral then
+				r, g, b = Skin.AccentColor()
+			else
+				r, g, b = unpack(color.base)
+			end
+			row.fill:SetColorTexture(sr + (r - sr) * RING_MIX, sg + (g - sg) * RING_MIX, sb + (b - sb) * RING_MIX, 1)
+			row.bar:SetColorTexture(r, g, b, 1)
+			label:SetTextColor(1, 1, 1)
+		else
+			row.fill:SetColorTexture(0, 0, 0, 0)
+			row.bar:SetColorTexture(0, 0, 0, 0)
+			label:SetTextColor(unpack(color.base))
+		end
+	end
+end
+
 local function setHighlight(index)
+	if wheel.list then
+		setListHighlight(index)
+		return
+	end
+	if wheel.style == "ring" then
+		setRingHighlight(index)
+		return
+	end
+	if wheel.flat then
+		setPillHighlight(index)
+		return
+	end
 	for i, label in ipairs(labels) do
 		local color = label.presetColor or PRESET_COLOR.neutral
 		if i == index then
 			label:SetTextColor(unpack(color.highlight))
-			label:SetFont(NAME_FONT_PATH, LABEL_FONT_SIZE_HIGHLIGHT, "OUTLINE")
+			label:SetFont(fontPath(), LABEL_FONT_SIZE_HIGHLIGHT, "OUTLINE")
 		else
 			label:SetTextColor(unpack(color.base))
-			label:SetFont(NAME_FONT_PATH, LABEL_FONT_SIZE, "OUTLINE")
+			label:SetFont(fontPath(), LABEL_FONT_SIZE, "OUTLINE")
 		end
 	end
 	if index then
@@ -566,6 +1110,20 @@ local function setHighlight(index)
 	if wheel.deadzoneRing then
 		wheel.deadzoneRing:SetAlpha(index and 0.45 or 1)
 	end
+end
+
+-- drops the wheel so the next open builds it in the current style
+function ns.RebuildRadialWheel()
+	if not wheel then
+		return
+	end
+	wheel:Hide()
+	wheel = nil
+	radialFadeMask = nil
+	wipe(labels)
+	wipe(dividers)
+	wipe(wedgePieces)
+	sliceCount = 0
 end
 
 -- target first, then whatever nameplate/frame the mouse is over. re-resolved on every
@@ -629,7 +1187,11 @@ local function updateActiveUnitDisplay()
 		wheel.nameText:SetText(openIdentity.name)
 		wheel.nameText:SetTextColor(r, g, b)
 		wheel.nameText:Show()
-		wheel.nameBg:SetSize(wheel.nameText:GetStringWidth() + 60, wheel.nameText:GetStringHeight() + 36)
+		if wheel.flat then
+			wheel.nameBg:SetSize(wheel.nameText:GetStringWidth() + 24, wheel.nameText:GetStringHeight() + 10)
+		else
+			wheel.nameBg:SetSize(wheel.nameText:GetStringWidth() + 60, wheel.nameText:GetStringHeight() + 36)
+		end
 		wheel.nameBg:Show()
 	else
 		wheel.nameText:Hide()
@@ -649,12 +1211,19 @@ local function onCursorUpdate()
 	local scale = UIParent:GetEffectiveScale()
 	x, y = x / scale, y / scale
 	local dx, dy = x - wheel.centerX, y - wheel.centerY
+	if wheel.list then
+		-- same rule as the secure pick
+		local count = openPresets and #openPresets or 0
+		local row = math.floor((-dy - LIST_TOP) / LIST_ROW) + 1
+		setHighlight((row >= 1 and row <= count) and row or nil)
+		return
+	end
 	-- the pointer only tracks once the cursor has actually left the deadzone (the ring
 	-- art alone marks "nothing selected yet" inside it); showing an arrow with nowhere
 	-- meaningful to point yet reads as implying a direction before one's reachable
 	local inDeadzone = dx * dx + dy * dy <= DEADZONE * DEADZONE
 	if not inDeadzone then
-		wheel.pointer:SetRotation(math.atan2(dy, dx))
+		pointAt(math.atan2(dy, dx))
 		wheel.pointer:Show()
 	else
 		wheel.pointer:Hide()
@@ -746,6 +1315,9 @@ function Controller:OnOpen(ring)
 	-- instead. nothing to act on just means no ring shows; wr-active (set below) tells
 	-- the secure snippet's keyup handler so it treats the release as a tap unconditionally
 	-- rather than measuring cursor movement against a wheel that never had anything to show
+	if ns.IsSuppressed() then
+		return
+	end
 	openedAt = GetTime()
 	local ringButton = RingButtons[ring]
 	escCancelled = false
@@ -856,6 +1428,10 @@ function Controller:OnTap(ring, immediate)
 	local isHover = tapIsHover
 	closeWheel()
 	if consumeEscCancel() then return end
+	if ns.IsSuppressed() then
+		ns.NotifySuppressed()
+		return
+	end
 	if not immediate and identity then
 		local action = isHover and ns.GetSettings().tapHoverAction or ns.GetSettings().tapTargetAction
 		ns.PerformTapAction(action, identity)
@@ -904,8 +1480,15 @@ local function rebuild()
 	RingButton1:SetAttribute("wr-count", #ns.GetRadialPresetSet(1))
 	RingButton2:SetAttribute("wr-count", settings.secondEnabled and #ns.GetRadialPresetSet(2) or 0)
 	RingButton2:SetAttribute("wr-showempty", settings.secondEnabled and true or false)
+	local list = settings.wheelStyle == "list"
+	for _, button in ipairs(RingButtons) do
+		if list or button:GetAttribute("wr-list") then
+			button:SetAttribute("wr-list", list)
+		end
+	end
 
-	if not settings.enabled then
+	-- disabled: no overrides, so the key falls back to the plain binding, which does nothing
+	if not settings.enabled or ns.IsSuppressed() then
 		return
 	end
 
@@ -927,6 +1510,13 @@ end
 local combatWaiter = CreateFrame("Frame")
 combatWaiter:RegisterEvent("PLAYER_REGEN_ENABLED")
 combatWaiter:SetScript("OnEvent", rebuild)
+
+-- in combat this waits for PLAYER_REGEN_ENABLED above; OnOpen bails out meanwhile
+ns.OnSuppressionChanged(function(_, stateChanged)
+	if stateChanged then
+		rebuild()
+	end
+end)
 
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
@@ -961,7 +1551,7 @@ function ns.ShowRadialPreview(identity, x, y)
 	wheel:ClearAllPoints()
 	wheel:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
 	setHighlight(1)
-	wheel.pointer:SetRotation(math.pi / 2)
+	pointAt(math.pi / 2)
 	wheel.pointer:Show()
 	wheel:Show()
 	return true
