@@ -260,6 +260,16 @@ function ns.GetNearbyNotablePlayers()
 	return results
 end
 
+-- nameplate unit token for a record key, for typed names (any casing)
+function ns.FindNameplateUnitByKey(key)
+	for unit, identity in pairs(visibleUnits) do
+		if identity and identity.key == key then
+			return unit
+		end
+	end
+	return nil
+end
+
 -- nameplate unit token by name, for events that only give a name (RESURRECT_REQUEST
 -- etc), not a unit token. see ns.FindLiveUnit, checks this after your target
 function ns.FindNameplateUnit(name, realmOrSurname)

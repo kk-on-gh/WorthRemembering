@@ -1,7 +1,7 @@
 ## Interface: 16001, 120105
 ## Title: Worth Remembering
 ## Notes: Keep distinct, timestamped notes and a -100..+100 standing on players you meet.
-## Author: Kyle
+## Author: Malice
 ## Version: 1.3
 ## OptionalDeps: EllesmereUI
 ## SavedVariables: WorthRememberingDB

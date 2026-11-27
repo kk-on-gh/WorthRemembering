@@ -49,6 +49,7 @@ local function showMenu()
 	ns.Skin.ContextMenu(UIParent, function(_, rootDescription)
 		rootDescription:CreateTitle("Worth Remembering")
 		rootDescription:CreateButton("Open Window", function() ns.ShowOverview() end)
+		rootDescription:CreateButton("Add Player", function() ns.ShowAddPlayer() end)
 		rootDescription:CreateButton("Options", function() ns.SelectOptionsTab() end)
 		if ns.GetSettings().disable.all then
 			rootDescription:CreateButton("Enable Worth Remembering", function() ns.SetDisabledEntirely(false) end)

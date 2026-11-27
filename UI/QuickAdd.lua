@@ -6,7 +6,13 @@ local currentKey
 local autoCloseOnSubmit
 local layoutPresets -- refresh() above calls this
 
+local refreshAddMode -- add-player mode, see below
+
 local function refresh()
+	if popup.addMode then
+		refreshAddMode()
+		return
+	end
 	local record = currentKey and ns.GetPlayerRecord(currentKey, false)
 	if not record then
 		popup:Hide()
@@ -31,22 +37,35 @@ end
 local function submitEntry()
 	local text = popup.noteBox:GetText()
 	local delta = tonumber(popup.repBox:GetText())
-	if not currentKey or (text == "" and (not delta or delta == 0)) then
+	if text == "" and (not delta or delta == 0) then
 		return
 	end
 
-	local record = ns.GetPlayerRecord(currentKey, false)
-	if not record then
-		return
+	local identity, unit
+	if popup.addMode then
+		identity, unit = ns.ResolveTypedName(popup.firstBox:GetText(), popup.lastBox:GetText())
+		if not identity then
+			popup.nameMissing()
+			return
+		end
+	else
+		local record = currentKey and ns.GetPlayerRecord(currentKey, false)
+		if not record then
+			return
+		end
+		identity, unit = ns.LiveIdentityForRecord(record)
+		identity.key = currentKey
 	end
-
-	local identity, unit = ns.LiveIdentityForRecord(record)
 	local entry = ns.CaptureContext(unit)
 	entry.text = text ~= "" and text or nil
 	entry.delta = delta and delta ~= 0 and delta or nil
 	entry.featured = (popup.featuredCheck:GetChecked() and entry.text) and true or nil
 	entry.source = "manual"
-	ns.AddEntry(currentKey, identity, entry)
+	ns.AddEntry(identity.key, identity, entry)
+	if popup.addMode then
+		currentKey = identity.key
+		popup.setAddMode(false)
+	end
 
 	popup.noteBox:SetText("")
 	popup.repBox:SetText("")
@@ -71,14 +90,20 @@ end
 local presetButtonPool = {}
 
 local function applyPresetAndSubmit(preset)
-	if not currentKey then
-		return
-	end
 	-- placeholders ({{loc}} etc) resolved here, at click time, so the note box shows
 	-- the actual filled-in text before it submits, not the literal placeholder.
-	local record = ns.GetPlayerRecord(currentKey, false)
 	local identity, unit
-	if record then
+	if popup.addMode then
+		identity, unit = ns.ResolveTypedName(popup.firstBox:GetText(), popup.lastBox:GetText())
+		if not identity then
+			popup.nameMissing()
+			return
+		end
+	else
+		local record = currentKey and ns.GetPlayerRecord(currentKey, false)
+		if not record then
+			return
+		end
 		identity, unit = ns.LiveIdentityForRecord(record)
 	end
 	local ctx = ns.CaptureContext(unit)
@@ -165,10 +190,208 @@ local CHAIN_HEIGHT_AFTER_NOTE_LABEL = NOTE_LABEL_HEIGHT + NOTE_LABEL_GAP + NOTE_
 -- repositions the note label (everything below chains relatively) and resizes the
 -- popup to fit, given however tall the presets area ended up (see layoutPresets).
 local function relayout(presetsHeight)
-	local noteLabelY = PRESETS_TOP_Y - presetsHeight - AFTER_PRESETS_GAP
+	local noteLabelY = (popup.presetsTop or PRESETS_TOP_Y) - presetsHeight - AFTER_PRESETS_GAP
 	popup.noteLabel:SetPoint("TOPLEFT", popup, "TOPLEFT", 38, noteLabelY)
 	local deltaRowBottomY = noteLabelY - CHAIN_HEIGHT_AFTER_NOTE_LABEL
 	popup:SetHeight(-deltaRowBottomY + BOTTOM_GAP + BOTTOM_ROW_HEIGHT + BOTTOM_PAD)
+end
+
+-- Add-player mode: the same popup with name boxes under the title, for someone who isn't
+-- your target. The record is only created by Add Entry (or a preset).
+local NAME_ROW_HEIGHT = 20
+local ADD_MODE_EXTRA = 32 -- the name row pushes the presets down this far
+local SUGGESTION_ROWS = 6
+local SUGGESTION_HEIGHT = 18
+local NAME_BOX_WIDTH = 136
+
+local function addPlaceholder(box, text)
+	local hint = Skin.Text(box, "ARTWORK", "GameFontDisableSmall")
+	hint:SetPoint("LEFT", 4, 0)
+	hint:SetText(text)
+	box:HookScript("OnTextChanged", function(self)
+		hint:SetShown(self:GetText() == "")
+	end)
+end
+
+-- saved players whose name starts with what's typed, best known first
+local function findSuggestions(first, last)
+	local typed = (first .. (last ~= "" and (" " .. last) or "")):lower()
+	if typed == "" then
+		return {}
+	end
+	local exactKey = ns.TypedNameKey(first, last)
+	local matches = {}
+	for _, key in ipairs(ns.GetAllPlayerKeys()) do
+		local record = ns.GetPlayerRecord(key, false)
+		if record and record.name and key ~= exactKey then
+			local full = (record.name .. (record.realmOrSurname and (" " .. record.realmOrSurname) or "")):lower()
+			if full:sub(1, #typed) == typed then
+				matches[#matches + 1] = { key = key, record = record, full = full }
+			end
+		end
+	end
+	table.sort(matches, function(a, b)
+		local sa, sb = math.abs(a.record.standing or 0), math.abs(b.record.standing or 0)
+		if sa ~= sb then
+			return sa > sb
+		end
+		return a.full < b.full
+	end)
+	return matches
+end
+
+local function updateSuggestions()
+	local list = popup.suggestions
+	local focused = popup.firstBox:HasFocus() or popup.lastBox:HasFocus()
+	local matches = focused and findSuggestions(popup.firstBox:GetText(), popup.lastBox:GetText()) or {}
+	for i = 1, SUGGESTION_ROWS do
+		local row, match = list.rows[i], matches[i]
+		row:SetShown(match ~= nil)
+		if match then
+			row.record = match.record
+			row.text:SetText(ns.DisplayName(match.record, match.key))
+			row.text:SetTextColor(ns.ClassColor(match.record.classFile))
+			local standing = match.record.standing or 0
+			row.standing:SetText((standing > 0 and "+" or "") .. standing)
+			row.standing:SetTextColor(unpack(ns.GetBracket(standing).color))
+		end
+	end
+	local shown = math.min(#matches, SUGGESTION_ROWS)
+	list:SetHeight(shown * SUGGESTION_HEIGHT + 4)
+	list:SetShown(shown > 0)
+end
+
+function refreshAddMode()
+	popup.title:SetText("Add Player")
+	popup.title:SetTextColor(Skin.AccentColor())
+	local first, last = popup.firstBox:GetText(), popup.lastBox:GetText()
+	local key = ns.TypedNameKey(first, last)
+	local record = key and ns.GetPlayerRecord(key, false)
+	popup.matchKey = record and key or nil
+	popup.historyButton:SetEnabled(record ~= nil)
+	popup.detailsButton:SetEnabled(record ~= nil)
+	if not key then
+		popup.standing:SetText(ns.UsesSurnames() and "Type their first and last name." or "Type their name. Leave the realm blank for your own.")
+		popup.standing:SetTextColor(0.6, 0.6, 0.6)
+	elseif record then
+		local standing = record.standing or 0
+		local bracket = ns.GetBracket(standing)
+		popup.standing:SetText("Already in your list: standing " .. standing .. "  (" .. bracket.name .. ")")
+		popup.standing:SetTextColor(unpack(bracket.color))
+	else
+		local _, unit = ns.ResolveTypedName(first, last)
+		popup.standing:SetText(unit == "target" and "New player (your target)" or "New player")
+		popup.standing:SetTextColor(0.6, 0.6, 0.6)
+	end
+	layoutPresets()
+end
+
+local function buildNameRow()
+	local row = CreateFrame("Frame", nil, popup)
+	row:SetSize(2 * NAME_BOX_WIDTH + 12, NAME_ROW_HEIGHT)
+	row:SetPoint("TOP", popup.title, "BOTTOM", 0, -14)
+	row:Hide()
+	popup.nameRow = row
+
+	popup.firstBox = ns.CreateSmallEditBox(row, NAME_BOX_WIDTH, 18)
+	popup.firstBox:SetJustifyH("LEFT")
+	popup.firstBox:SetTextInsets(4, 4, 0, 0)
+	popup.firstBox:SetPoint("LEFT")
+	popup.lastBox = ns.CreateSmallEditBox(row, NAME_BOX_WIDTH, 18)
+	popup.lastBox:SetJustifyH("LEFT")
+	popup.lastBox:SetTextInsets(4, 4, 0, 0)
+	popup.lastBox:SetPoint("RIGHT")
+	if ns.UsesSurnames() then
+		addPlaceholder(popup.firstBox, "First name")
+		addPlaceholder(popup.lastBox, "Last name")
+	else
+		addPlaceholder(popup.firstBox, "Name")
+		addPlaceholder(popup.lastBox, "Realm (blank = yours)")
+	end
+
+	local function onChanged()
+		if popup.addMode then
+			refreshAddMode()
+			updateSuggestions()
+		end
+	end
+	for _, box in ipairs({ popup.firstBox, popup.lastBox }) do
+		box:HookScript("OnTextChanged", onChanged)
+		box:HookScript("OnEditFocusGained", updateSuggestions)
+		box:SetScript("OnEditFocusLost", function()
+			-- a frame later, so a click on a suggestion lands first
+			C_Timer.After(0.1, updateSuggestions)
+		end)
+		box:SetScript("OnEscapePressed", function(self)
+			self:ClearFocus()
+			popup:Hide()
+		end)
+	end
+	local function toLast() popup.lastBox:SetFocus() end
+	local function toNote() popup.noteBox:SetFocus() end
+	popup.firstBox:SetScript("OnEnterPressed", toLast)
+	popup.firstBox:SetScript("OnTabPressed", toLast)
+	popup.lastBox:SetScript("OnEnterPressed", toNote)
+	popup.lastBox:SetScript("OnTabPressed", toNote)
+
+	-- the status line sits under the name row in this mode, see setAddMode
+	popup.nameMissing = function()
+		popup.firstBox:SetFocus()
+		popup.standing:SetTextColor(1, 0.38, 0.38)
+	end
+
+	local list = CreateFrame("Frame", nil, popup, "BackdropTemplate")
+	list:SetPoint("TOPLEFT", row, "BOTTOMLEFT", 0, -2)
+	list:SetPoint("TOPRIGHT", row, "BOTTOMRIGHT", 0, -2)
+	list:SetFrameLevel(popup:GetFrameLevel() + 20)
+	if not Skin.Panel(list, "float") then
+		list:SetBackdrop({ bgFile = "Interface/Buttons/WHITE8X8", edgeFile = "Interface/Buttons/WHITE8X8", edgeSize = 1 })
+		list:SetBackdropColor(0.06, 0.05, 0.03, 0.98)
+		list:SetBackdropBorderColor(1, 0.82, 0, 0.6)
+	end
+	list:Hide()
+	list.rows = {}
+	for i = 1, SUGGESTION_ROWS do
+		local button = CreateFrame("Button", nil, list)
+		button:SetHeight(SUGGESTION_HEIGHT)
+		button:SetPoint("TOPLEFT", 2, -2 - (i - 1) * SUGGESTION_HEIGHT)
+		button:SetPoint("TOPRIGHT", -2, -2 - (i - 1) * SUGGESTION_HEIGHT)
+		local highlight = button:CreateTexture(nil, "HIGHLIGHT")
+		highlight:SetAllPoints()
+		Skin.Accent(highlight, 0.15)
+		button.text = Skin.Text(button, "ARTWORK", "GameFontHighlightSmall")
+		button.text:SetPoint("LEFT", 6, 0)
+		button.standing = Skin.Text(button, "ARTWORK", "GameFontHighlightSmall")
+		button.standing:SetPoint("RIGHT", -6, 0)
+		button:SetScript("OnClick", function(self)
+			popup.firstBox:SetText(self.record.name or "")
+			popup.lastBox:SetText(self.record.realmOrSurname or "")
+			list:Hide()
+			popup.noteBox:SetFocus()
+		end)
+		list.rows[i] = button
+	end
+	popup.suggestions = list
+
+	popup.setAddMode = function(on)
+		popup.addMode = on and true or nil
+		row:SetShown(on)
+		if not on then
+			list:Hide()
+			popup.matchKey = nil
+			popup.historyButton:Enable()
+			popup.detailsButton:Enable()
+		end
+		popup.standing:ClearAllPoints()
+		if on then
+			popup.standing:SetPoint("TOP", row, "BOTTOM", 0, -8)
+		else
+			popup.standing:SetPoint("TOP", popup.title, "BOTTOM", 0, -6)
+		end
+		popup.presetsTop = on and (PRESETS_TOP_Y - ADD_MODE_EXTRA) or PRESETS_TOP_Y
+		popup.presetsArea:ClearAllPoints()
+		popup.presetsArea:SetPoint("TOPLEFT", popup, "TOPLEFT", 20, popup.presetsTop)
+	end
 end
 
 local function createPopup()
@@ -191,6 +414,9 @@ local function createPopup()
 		popup.noteBox:SetText("")
 		popup.repBox:SetText("")
 		popup.featuredCheck:SetChecked(false)
+		if popup.addMode then
+			popup.setAddMode(false)
+		end
 	end)
 	popup.relayout = relayout
 	-- border only, no bgFile, see Overview.lua's mainFrame backdrop. opacity comes
@@ -383,8 +609,9 @@ local function createPopup()
 	popup.historyButton:SetPoint("BOTTOMRIGHT", -20, 16)
 	popup.historyButton:SetText("History")
 	popup.historyButton:SetScript("OnClick", function()
+		local key = popup.addMode and popup.matchKey or currentKey
 		popup:Hide()
-		ns.SelectHistoryTab(currentKey)
+		ns.SelectHistoryTab(key)
 	end)
 
 	popup.detailsButton = CreateFrame("Button", nil, popup, "UIPanelButtonTemplate")
@@ -393,11 +620,14 @@ local function createPopup()
 	popup.detailsButton:SetPoint("RIGHT", popup.historyButton, "LEFT", -6, 0)
 	popup.detailsButton:SetText("Details")
 	popup.detailsButton:SetScript("OnClick", function()
+		local key = popup.addMode and popup.matchKey or currentKey
 		popup:Hide()
 		if ns.ShowPlayerDetails then
-			ns.ShowPlayerDetails(currentKey)
+			ns.ShowPlayerDetails(key)
 		end
 	end)
+
+	buildNameRow()
 end
 
 -- `autoClose`, when true, hides the popup right after a successful Add Entry. used by
@@ -412,6 +642,9 @@ function ns.ShowQuickAdd(key, autoClose, noFocus)
 		popup.noteBox:SetText("")
 		popup.repBox:SetText("")
 		popup.featuredCheck:SetChecked(false)
+	end
+	if popup.addMode then
+		popup.setAddMode(false)
 	end
 	currentKey = key
 	autoCloseOnSubmit = autoClose and true or false
@@ -640,4 +873,30 @@ function ns.HideQuickAddPreview()
 		end
 		previewPoints = nil
 	end
+end
+
+-- quick-add for someone typed by name, from the Players tab, the minimap menu or /wr add
+function ns.ShowAddPlayer(first, last)
+	if not popup then
+		createPopup()
+	end
+	popup.noteBox:SetText("")
+	popup.repBox:SetText("")
+	popup.featuredCheck:SetChecked(false)
+	currentKey = nil
+	autoCloseOnSubmit = false
+	popup.setAddMode(true)
+	popup.firstBox:SetText(first or "")
+	popup.lastBox:SetText(last or "")
+	refresh()
+	popup:Show()
+	C_Timer.After(0, function()
+		if popup:IsShown() and popup.addMode then
+			if ns.TypedNameKey(popup.firstBox:GetText(), popup.lastBox:GetText()) then
+				popup.noteBox:SetFocus()
+			else
+				popup.firstBox:SetFocus()
+			end
+		end
+	end)
 end

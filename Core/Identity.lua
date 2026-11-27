@@ -122,6 +122,68 @@ function ns.ResolveDisplayName(firstName, lastName)
 	return { key = key, name = firstName, realmOrSurname = lastName, guid = nil }, nil
 end
 
+-- Typed names (/wr commands, Add Player). Forever: "Firstname Lastname", both required.
+-- Retail: "Name" for your own realm, or "Name-Realm".
+
+function ns.UsesSurnames()
+	return usesSurnameIdentity
+end
+
+-- splits a command's text into name parts and the rest: first, last, tail
+function ns.ParseTypedName(text)
+	if usesSurnameIdentity then
+		local first, last, tail = text:match("^(%S+)%s+(%S+)%s*(.-)$")
+		return first, last, tail or ""
+	end
+	local token, tail = text:match("^(%S+)%s*(.-)$")
+	if not token then
+		return nil, nil, ""
+	end
+	local first, realm = ns.SplitNameSuffix(token)
+	return first, realm, tail or ""
+end
+
+local function capitalize(word)
+	return word and (word:sub(1, 1):upper() .. word:sub(2)) or nil
+end
+
+-- key for a typed name, or nil when it's incomplete
+function ns.TypedNameKey(first, last)
+	if not first or first == "" or (usesSurnameIdentity and (not last or last == "")) then
+		return nil
+	end
+	return ns.BuildKey(first, last ~= "" and last or nil)
+end
+
+-- identity for a typed name, not case-sensitive: your target or mouseover, a visible
+-- nameplate, a saved record, or else a new name-only identity. returns identity, unit, record
+function ns.ResolveTypedName(first, last)
+	local key = ns.TypedNameKey(first, last)
+	if not key then
+		return nil
+	end
+	for _, unit in ipairs({ "target", "mouseover" }) do
+		if UnitExists(unit) and UnitIsPlayer(unit) then
+			local identity = ns.IdentifyUnit(unit)
+			if identity and identity.key == key then
+				return identity, unit, ns.GetPlayerRecord(key, false)
+			end
+		end
+	end
+	local plate = ns.FindNameplateUnitByKey and ns.FindNameplateUnitByKey(key)
+	local identity = plate and ns.IdentifyUnit(plate)
+	if identity and identity.key == key then
+		return identity, plate, ns.GetPlayerRecord(key, false)
+	end
+	local record = ns.GetPlayerRecord(key, false)
+	if record then
+		identity = ns.LiveIdentityForRecord(record)
+		identity.key = key
+		return identity, nil, record
+	end
+	return { key = key, name = capitalize(first), realmOrSurname = capitalize(last ~= "" and last or nil) }, nil, nil
+end
+
 -- identity for an existing record. prefers live unit data if it matches your target,
 -- else cached fields. shared by quick-add popup and the inline +/- buttons
 function ns.LiveIdentityForRecord(record)

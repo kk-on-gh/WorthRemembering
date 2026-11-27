@@ -73,6 +73,22 @@ ns.TOURS = {
 	},
 	-- "what's new" tours, one per version, started from that version's patch notes.
 	-- keep only the newest three, the About tab ignores older ones anyway
+	["v1.3.1"] = {
+		{
+			title = "What's new in 1.3.1",
+			text = "A quick look at what's new.",
+		},
+		{
+			tab = "players", target = "players.addPlayer", side = "below",
+			title = "Add Player",
+			text = "Add a note or standing for anyone by typing their name, even if they're nowhere near you. Players you already know are suggested as you type.\n\nIt's also in the minimap button's menu, and /wr add.",
+		},
+		{
+			tab = "about",
+			title = "That's all for 1.3.1",
+			text = "Thanks for using Worth Remembering!",
+		},
+	},
 	["v1.3"] = {
 		{
 			title = "What's new in 1.3",

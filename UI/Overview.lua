@@ -1258,6 +1258,14 @@ local function createPlayersContent()
 		columnsSummaryText, 150, "Show All Columns", showAllColumns)
 	columnsDropdown:SetPoint("RIGHT", clearFiltersButton, "LEFT", -8, 0)
 
+	local addPlayerButton = CreateFrame("Button", nil, filterBar, "UIPanelButtonTemplate")
+	addPlayerButton:SetSize(90, 20)
+	addPlayerButton:SetText("Add Player")
+	addPlayerButton:SetScript("OnClick", function() ns.ShowAddPlayer() end)
+	Skin.Button(addPlayerButton)
+	ns.AttachHookTooltip(addPlayerButton, "Add a note or standing for someone by typing their name, even if they're nowhere near you.")
+	ns.RegisterTourTarget("players.addPlayer", addPlayerButton)
+
 	local countLabel = filterBar.countLabel
 	countLabel:SetWidth(100)
 	countLabel:SetJustifyH("RIGHT")
@@ -1294,7 +1302,7 @@ local function createPlayersContent()
 			dropdownUnit("faction", bottom[4], factionFilter),
 		},
 		right = {
-			{ id = "count", pin = "top", pieces = { { countLabel }, { filterBar.actionButton, 10 } } },
+			{ id = "count", pin = "top", pieces = { { countLabel }, { filterBar.actionButton, 10 }, { addPlayerButton, 8 } } },
 			{ id = "multiSelect", pin = "bottom", pieces = { { multi }, { multi.label, 2 } } },
 			{ id = "columns", pin = "bottom", pieces = { { columnsDropdown }, { clearFiltersButton, 8 } } },
 		},

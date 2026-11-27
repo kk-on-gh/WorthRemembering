@@ -2,23 +2,13 @@ local ns = WorthRemembering
 
 -- commands for adding/inspecting records by typed name. matches your target, pull a
 -- real identity off the unit. otherwise keys on the name alone, no realm/GUID to confirm
-local usesSurnameIdentity = (Constants ~= nil and Constants.CharacterNameSeparatorConsts ~= nil)
-
--- Forever displays "Firstname Lastname" as two space-separated tokens, so the name
--- portion of a typed command can't stop at the first space like on Name-Realm clients.
-local function parseTypedName(msg)
-	if usesSurnameIdentity then
-		local first, last, tail = msg:match("^(%S+)%s+(%S+)%s*(.-)$")
-		return first, last, tail or ""
-	end
-	local first, tail = msg:match("^(%S+)%s*(.-)$")
-	return first, nil, tail or ""
-end
+local parseTypedName = ns.ParseTypedName
 
 local function printUsage()
 	ns.Print("commands:")
 	print("  /wr                     - open the Worth Remembering window")
 	print("  /wr off | on            - disable Worth Remembering entirely, or enable it again")
+	print("  /wr add [name]          - add a note or standing for anyone, by name")
 	print("  /wr note <name> <text>  - add a note entry")
 	print("  /wr rep <name> <delta>  - add a standing-change entry")
 	print("  /wr show <name>         - print a player's record")
@@ -111,7 +101,11 @@ local function cmdNote(msg)
 		return
 	end
 
-	local identity, unit = ns.ResolveDisplayName(first, last)
+	local identity, unit = ns.ResolveTypedName(first, last)
+	if not identity then
+		ns.Print("Usage: /wr note <name> <text>")
+		return
+	end
 	local entry = ns.CaptureContext(unit)
 	entry.text = text
 	entry.source = "manual"
@@ -127,7 +121,11 @@ local function cmdRep(msg)
 		return
 	end
 
-	local identity, unit = ns.ResolveDisplayName(first, last)
+	local identity, unit = ns.ResolveTypedName(first, last)
+	if not identity then
+		ns.Print("Usage: /wr rep <name> <delta>")
+		return
+	end
 	local entry = ns.CaptureContext(unit)
 	entry.delta = delta
 	entry.source = "manual"
@@ -142,7 +140,11 @@ local function cmdShow(msg)
 		return
 	end
 
-	local identity = ns.ResolveDisplayName(first, last)
+	local identity = ns.ResolveTypedName(first, last)
+	if not identity then
+		ns.Print("Usage: /wr show <name>")
+		return
+	end
 	local record = ns.GetPlayerRecord(identity.key, false)
 	if not record then
 		ns.Print("no record for " .. ns.DisplayName(identity) .. ".")
@@ -198,6 +200,9 @@ SlashCmdList["WR"] = function(msg)
 		else
 			ns.Print("enabled.")
 		end
+	elseif cmd == "add" then
+		local first, last = parseTypedName(rest)
+		ns.ShowAddPlayer(first or rest:match("^(%S+)"), last)
 	elseif cmd == "note" then
 		cmdNote(rest)
 	elseif cmd == "rep" then
