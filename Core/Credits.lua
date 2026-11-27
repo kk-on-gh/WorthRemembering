@@ -1,9 +1,10 @@
 local ns = WorthRemembering
 
--- community credits. page = an Options sub-tab key (shows a heart there), optional.
+-- community credits. page = an Options sub-tab key, or "players" (shows a heart there), optional.
 -- shown as "<what> <kind> by <who>"
 ns.CREDITS = {
 	{ kind = "suggested", what = "Ignoring functionality", who = "Reddit user /u/Ksir73", page = "ignore", version = "1.1" },
+	{ kind = "suggested", what = "Adding players by name", who = "CurseForge user Serdon", page = "players", version = "1.3.1" },
 }
 
 function ns.CreditText(credit)

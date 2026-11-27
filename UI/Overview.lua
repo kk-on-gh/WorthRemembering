@@ -1315,6 +1315,11 @@ local function createPlayersContent()
 	ns.RegisterTourTarget("players.table", playersTable.container)
 	ns.RegisterTourTarget("players.filters", function() return { filterBar, flow.LastRow() } end)
 	ns.RegisterTourTarget("players.ignoredFilter", mid[3])
+
+	-- community credit: under the close button, wherever the theme puts that
+	ns.AttachCreditHeart(content, "players", nil, function(heart)
+		heart:SetPoint("TOP", mainFrame.closeButton, "BOTTOM", 3, -4)
+	end)
 end
 
 -- window position/size are saved on every move/resize and restored at creation,
@@ -1543,6 +1548,7 @@ local function createMainFrame()
 	close:SetText("X")
 	close:SetScript("OnClick", function() mainFrame:Hide() end)
 	Skin.CloseButton(close, mainFrame)
+	mainFrame.closeButton = close
 
 	local minimizeButton = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
 	minimizeButton:SetSize(20, 20)
@@ -1685,7 +1691,7 @@ function ns.UpdateDisabledNotice()
 	end
 	if not notice then
 		notice = CreateFrame("Frame", nil, mainFrame)
-		notice:SetPoint("TOPRIGHT", -18, -42)
+		notice:SetPoint("TOPRIGHT", -40, -42)
 		notice:SetSize(1, 22)
 		notice.button = CreateFrame("Button", nil, notice, "UIPanelButtonTemplate")
 		notice.button:SetSize(80, 20)

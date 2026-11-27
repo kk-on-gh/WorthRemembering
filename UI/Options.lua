@@ -3831,16 +3831,21 @@ local function showCreditPopup(credits)
 	creditPopup:Show()
 end
 
--- one heart per sub-tab page, top right. hover for the credit, click for the popup.
--- inset defaults past a scrollbar, non-scrolling pages pass their own
-local function attachCreditHeart(content, page, inset)
+-- one heart per page, top right. hover for the credit, click for the popup.
+-- inset defaults past a scrollbar, non-scrolling pages pass their own; place(heart)
+-- positions it instead, for pages outside Options
+local function attachCreditHeart(content, page, inset, place)
 	local credits = page and ns.GetCreditsForPage(page) or {}
 	if #credits == 0 then
 		return
 	end
 	local heart = CreateFrame("Button", nil, content)
 	heart:SetSize(14, 14)
-	heart:SetPoint("TOPRIGHT", -(inset or 48), -12)
+	if place then
+		place(heart)
+	else
+		heart:SetPoint("TOPRIGHT", -(inset or 48), -12)
+	end
 	heart:SetFrameLevel(content:GetFrameLevel() + 20)
 	heart:SetNormalTexture(HEART_TEXTURE)
 	heart:SetHighlightTexture(HEART_TEXTURE, "ADD")
@@ -3852,6 +3857,7 @@ local function attachCreditHeart(content, page, inset)
 	setTooltip(heart, table.concat(lines, "\n\n"))
 	heart:SetScript("OnClick", function() showCreditPopup(credits) end)
 end
+ns.AttachCreditHeart = attachCreditHeart
 
 -- Each sub-tab panel is built lazily on first visit, same pattern as the main window's
 -- own tabs.

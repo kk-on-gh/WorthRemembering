@@ -81,7 +81,7 @@ ns.TOURS = {
 		{
 			tab = "players", target = "players.addPlayer", side = "below",
 			title = "Add Player",
-			text = "Add a note or standing for anyone by typing their name, even if they're nowhere near you. Players you already know are suggested as you type.\n\nIt's also in the minimap button's menu, and /wr add.",
+			text = "Add a note or standing for anyone by typing their name, even if they're nowhere near you. Players you already know are suggested as you type.\n\nIt's also in the minimap button's menu, and /wr add.\n\nSuggested by CurseForge user\nSerdon",
 		},
 		{
 			tab = "about",
