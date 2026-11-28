@@ -101,6 +101,9 @@ local function refresh()
 	-- act on it from here; a real player's name shouldn't double as a navigation link.
 	panel.nameButton:SetShown(record == nil)
 	if not record then
+		panel.copyText = nil
+		panel.nameCopy:ClearFocus()
+		panel.nameCopy:Hide()
 		panel.name:SetText("Select a player")
 		panel.name:SetTextColor(Skin.AccentColor())
 		panel.subline:SetText("")
@@ -124,6 +127,21 @@ local function refresh()
 
 	panel.name:SetText(ns.DisplayName(record, detailsKey))
 	panel.name:SetTextColor(cr, cg, cb)
+
+	-- copies the name as /target takes it; a record known only by guid has none to copy
+	panel.copyText = ns.TargetNameFor(record)
+	if not panel.copyText then
+		panel.nameCopy:ClearFocus()
+		panel.nameCopy:Hide()
+	else
+		panel.nameCopy:Show()
+		if not panel.nameCopy:HasFocus() then
+			panel.nameCopy:SetText(panel.copyText)
+			panel.nameCopy:SetCursorPosition(0)
+			panel.showCopyText(false)
+		end
+		panel.nameCopy:SetSize(math.max(40, panel.name:GetStringWidth() + 8), math.max(16, panel.name:GetStringHeight() + 4))
+	end
 
 	local race = ns.RaceDisplay(record) or "Unknown race"
 	local class = ns.ClassDisplayName(record.classFile)
@@ -195,6 +213,9 @@ ns.RefreshDetails = refresh
 
 function ns.ShowPlayerDetails(key)
 	detailsKey = key
+	if panel then
+		panel.nameCopy:ClearFocus()
+	end
 	ns.ShowOverview()
 	ns.SelectDetailsTab()
 	refresh()
@@ -218,6 +239,43 @@ function ns.BuildDetailsPanel(parent)
 	local nameHighlight = panel.nameButton:CreateTexture(nil, "HIGHLIGHT")
 	nameHighlight:SetAllPoints()
 	Skin.Accent(nameHighlight, 0.15)
+
+	-- a real player's name doubles as a copy box, like the About tab's contact lines:
+	-- click, then Ctrl+C (into a mail's To box, say).
+	panel.nameCopy = CreateFrame("EditBox", nil, parent)
+	panel.nameCopy:SetAutoFocus(false)
+	panel.nameCopy:SetFont(panel.name:GetFont())
+	panel.nameCopy:SetJustifyH("CENTER")
+	panel.nameCopy:SetPoint("CENTER", panel.name, "CENTER")
+	panel.nameCopy:Hide()
+	local function showCopyText(shown)
+		local r, g, b = panel.name:GetTextColor()
+		panel.nameCopy:SetTextColor(r, g, b, shown and 1 or 0)
+		panel.name:SetAlpha(shown and 0 or 1)
+	end
+	panel.nameCopy:SetScript("OnEditFocusGained", function(self)
+		showCopyText(true)
+		self:HighlightText()
+	end)
+	panel.nameCopy:SetScript("OnEditFocusLost", function(self)
+		-- a refresh while focused leaves the text alone, so catch up here
+		self:SetText(panel.copyText or "")
+		self:HighlightText(0, 0)
+		self:SetCursorPosition(0)
+		showCopyText(false)
+	end)
+	panel.nameCopy:SetScript("OnTextChanged", function(self, userInput)
+		if userInput then
+			self:SetText(panel.copyText or "")
+			self:HighlightText()
+		end
+	end)
+	panel.nameCopy:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+	panel.nameCopy:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+	ns.AttachTooltip(panel.nameCopy, "Click, then Ctrl+C to copy.")
+	-- a focused box keeps the keyboard even while hidden, so let go on a tab switch
+	parent:HookScript("OnHide", function() panel.nameCopy:ClearFocus() end)
+	panel.showCopyText = showCopyText
 
 	-- flanks the name rather than inline below. Blizzard has class/faction icon atlases
 	-- but nothing for race, so race stays as colored text in the subline
