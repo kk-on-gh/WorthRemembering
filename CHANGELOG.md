@@ -2,7 +2,7 @@
 
 All notable changes to Worth Remembering are documented here.
 
-## [1.3.1]
+## [1.3.1] - 2026-11-27
 
 ### Added
 - Add Player, suggested by CurseForge user Serdon: add a note or standing for anyone by typing their name, even if they're nowhere near you. On the Players tab, in the minimap button's menu, or /wr add. Players you already know are suggested as you type.
